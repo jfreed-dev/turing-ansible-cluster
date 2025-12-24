@@ -1,0 +1,37 @@
+---
+# Bootstrap nodes with base packages and prerequisites
+# Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/bootstrap.yml
+
+- name: Bootstrap cluster nodes
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+
+  pre_tasks:
+    - name: Display target information
+      ansible.builtin.debug:
+        msg: "Bootstrapping {{ inventory_hostname }} ({{ ansible_host }})"
+
+    - name: Wait for nodes to be reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  roles:
+    - base
+    - k3s-prereq
+
+  post_tasks:
+    - name: Reboot if required
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: reboot_required | default(false)
+
+    - name: Bootstrap complete
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} bootstrap complete"

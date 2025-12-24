@@ -1,0 +1,80 @@
+# kube-prometheus-stack Helm values
+# Matches Talos cluster monitoring configuration
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 18GB
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    # ARM64 optimizations
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+grafana:
+  adminPassword: admin
+  persistence:
+    enabled: true
+    storageClassName: longhorn
+    size: 5Gi
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+# Node exporter for host metrics
+nodeExporter:
+  enabled: true
+
+# Kube-state-metrics
+kubeStateMetrics:
+  enabled: true
+
+# Disable components not needed on ARM
+kubeEtcd:
+  enabled: false  # K3s embeds etcd differently
+
+kubeControllerManager:
+  enabled: false  # K3s uses different paths
+
+kubeScheduler:
+  enabled: false  # K3s uses different paths
+
+kubeProxy:
+  enabled: false  # K3s manages this internally

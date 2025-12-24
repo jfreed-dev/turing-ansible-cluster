@@ -1,0 +1,5 @@
+# Kubernetes sysctl settings
+# Managed by Ansible - do not edit manually
+{% for key, value in sysctl_settings.items() %}
+{{ key }} = {{ value }}
+{% endfor %}

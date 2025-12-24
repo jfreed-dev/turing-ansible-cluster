@@ -1,0 +1,87 @@
+---
+- name: Disable swap
+  ansible.builtin.command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+  changed_when: true
+
+- name: Remove swap from fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '\sswap\s'
+    state: absent
+
+- name: Create k3s directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+- name: Configure private registries (if defined)
+  ansible.builtin.template:
+    src: registries.yaml.j2
+    dest: /etc/rancher/k3s/registries.yaml
+    mode: "0644"
+  when: private_registries is defined
+
+- name: Setup NVMe storage for Longhorn
+  when: has_nvme | default(false)
+  block:
+    - name: Create partition on NVMe (if not exists)
+      community.general.parted:
+        device: "{{ nvme_device | default('/dev/nvme0n1') }}"
+        number: 1
+        state: present
+        fs_type: ext4
+      register: k3s_prereq_nvme_partition
+
+    - name: Format NVMe partition  # noqa: no-handler
+      community.general.filesystem:
+        dev: "{{ nvme_device | default('/dev/nvme0n1') }}p1"
+        fstype: ext4
+        force: false
+      when: k3s_prereq_nvme_partition.changed
+
+    - name: Create Longhorn mount point
+      ansible.builtin.file:
+        path: "{{ longhorn_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Mount NVMe for Longhorn
+      ansible.posix.mount:
+        path: "{{ longhorn_path }}"
+        src: "{{ nvme_device | default('/dev/nvme0n1') }}p1"
+        fstype: ext4
+        state: mounted
+
+    - name: Create K3s data directory on NVMe
+      ansible.builtin.file:
+        path: "{{ longhorn_path }}/rancher"
+        state: directory
+        mode: "0755"
+
+    - name: Check if /var/lib/rancher is already a symlink
+      ansible.builtin.stat:
+        path: /var/lib/rancher
+      register: k3s_prereq_rancher_dir
+
+    - name: Remove existing /var/lib/rancher directory (if not symlink)
+      ansible.builtin.file:
+        path: /var/lib/rancher
+        state: absent
+      when:
+        - k3s_prereq_rancher_dir.stat.exists
+        - not k3s_prereq_rancher_dir.stat.islnk
+
+    - name: Create symlink for K3s data to NVMe
+      ansible.builtin.file:
+        src: "{{ longhorn_path }}/rancher"
+        dest: /var/lib/rancher
+        state: link
+
+- name: Create Longhorn directory (non-NVMe nodes)
+  ansible.builtin.file:
+    path: "{{ longhorn_path }}"
+    state: directory
+    mode: "0755"
+  when: not (has_nvme | default(false))

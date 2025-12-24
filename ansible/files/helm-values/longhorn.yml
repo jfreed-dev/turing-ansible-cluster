@@ -1,0 +1,53 @@
+# Longhorn Helm values
+# Matches Talos cluster configuration
+
+defaultSettings:
+  defaultReplicaCount: 2
+  storageMinimalAvailablePercentage: 10
+  defaultDataPath: /var/lib/longhorn
+  createDefaultDiskLabeledNodes: true
+  defaultDataLocality: best-effort
+  replicaSoftAntiAffinity: true
+  storageOverProvisioningPercentage: 200
+  storageReservedPercentageForDefaultDisk: 15
+  upgradeChecker: false
+  allowVolumeCreationWithDegradedAvailability: true
+
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 2
+  reclaimPolicy: Delete
+
+longhornUI:
+  replicas: 1
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# ARM64 specific
+image:
+  longhorn:
+    engine:
+      repository: longhornio/longhorn-engine
+    manager:
+      repository: longhornio/longhorn-manager
+    ui:
+      repository: longhornio/longhorn-ui
+    instanceManager:
+      repository: longhornio/longhorn-instance-manager
+    shareManager:
+      repository: longhornio/longhorn-share-manager
+    backingImageManager:
+      repository: longhornio/backing-image-manager
+    supportBundleKit:
+      repository: longhornio/support-bundle-kit
+
+# ServiceMonitor for Prometheus
+metrics:
+  serviceMonitor:
+    enabled: true

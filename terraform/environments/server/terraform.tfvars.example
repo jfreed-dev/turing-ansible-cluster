@@ -1,0 +1,16 @@
+# Turing Pi BMC credentials (use environment variables - do not commit!)
+# export TURINGPI_USERNAME=root
+# export TURINGPI_PASSWORD=turing
+# export TURINGPI_ENDPOINT=https://10.10.88.70
+# export TURINGPI_INSECURE=true
+
+# Firmware flashing (WARNING: destructive!)
+flash_nodes   = false
+
+# Armbian with NPU support (recommended)
+# Download from: https://www.armbian.com/turing-rk1/
+firmware_path = "/path/to/Armbian_community_25.2.0_Turing-rk1_bookworm_vendor_6.1.75.img"
+
+# Boot verification
+boot_pattern  = "login:"
+boot_timeout  = 300  # 5 minutes

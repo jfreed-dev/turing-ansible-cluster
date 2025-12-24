@@ -1,0 +1,107 @@
+---
+# RKNN Runtime Installation
+# Installs only runtime components needed for NPU inference
+# Dev tools (rknn-toolkit2, ezrknpu) are NOT installed to save ~10GB per node
+
+- name: Install RKNN runtime dependencies
+  ansible.builtin.apt:
+    name:
+      - python3-pip
+      - python3-numpy
+      - python3-dev
+    state: present
+
+- name: Create RKNN directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/rknn
+    - /opt/rknn-llm
+    - /opt/rkllama
+
+- name: Clone RKNN-LLM runtime
+  ansible.builtin.git:
+    repo: https://github.com/airockchip/rknn-llm.git
+    dest: /opt/rknn-llm
+    version: main
+    depth: 1
+
+- name: Install RKNN runtime library from rknn-llm
+  ansible.builtin.shell: |
+    set -o pipefail
+    # Find and install the runtime library
+    LIBPATH=$(find /opt/rknn-llm -name "librknnrt.so" -path "*/Linux/*" -path "*/aarch64/*" | head -1)
+    if [ -n "$LIBPATH" ]; then
+      cp -f "$LIBPATH" /usr/lib/
+      ldconfig
+      echo "Installed librknnrt.so from $LIBPATH"
+    else
+      echo "ERROR: librknnrt.so not found in rknn-llm" >&2
+      exit 1
+    fi
+  args:
+    creates: /usr/lib/librknnrt.so
+    executable: /bin/bash
+
+- name: Clone rkllama server
+  ansible.builtin.git:
+    repo: https://github.com/jfreed-dev/rkllama.git
+    dest: /opt/rkllama
+    version: main
+    depth: 1
+
+- name: Install rkllama Python dependencies
+  ansible.builtin.pip:
+    requirements: /opt/rkllama/requirements.txt
+    executable: pip3
+    extra_args: --break-system-packages
+  failed_when: false
+
+- name: Install LLM server Python dependencies
+  ansible.builtin.pip:
+    name:
+      - flask==2.2.2
+      - Werkzeug==2.2.2
+      - python-dotenv
+      - huggingface_hub
+      - transformers
+    executable: pip3
+    extra_args: --break-system-packages
+  failed_when: false
+
+- name: Create RKNN environment script
+  ansible.builtin.copy:
+    dest: /etc/profile.d/rknn.sh
+    content: |
+      # RKNN Runtime Environment
+      export RKNN_LLM_PATH=/opt/rknn-llm
+      export RKLLAMA_PATH=/opt/rkllama
+      export PATH=$PATH:$RKLLAMA_PATH
+    mode: "0644"
+
+- name: Verify NPU is accessible
+  ansible.builtin.shell: |
+    set -o pipefail
+    # Modern rknpu driver (v0.9.6+) uses DRM subsystem
+    if [ -c /dev/dri/renderD129 ]; then
+      echo "NPU device found at /dev/dri/renderD129"
+      ls -la /dev/dri/renderD129
+      cat /sys/kernel/debug/rknpu/version 2>/dev/null || echo "Driver version: unknown"
+      cat /sys/kernel/debug/rknpu/load 2>/dev/null || true
+    elif [ -c /dev/rknpu* ]; then
+      echo "NPU device found (legacy path)"
+      ls -la /dev/rknpu*
+    else
+      echo "WARNING: NPU device not found - kernel driver may not be loaded"
+      echo "Ensure you are using Armbian vendor kernel (6.1.x)"
+    fi
+  args:
+    executable: /bin/bash
+  register: rknn_npu_check
+  changed_when: false
+
+- name: Display NPU status
+  ansible.builtin.debug:
+    var: rknn_npu_check.stdout_lines

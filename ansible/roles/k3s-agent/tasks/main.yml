@@ -1,0 +1,49 @@
+---
+- name: Get server token from control plane
+  ansible.builtin.set_fact:
+    k3s_server_token: "{{ hostvars[groups['controlplane'][0]]['k3s_server_token'] }}"
+    k3s_server_url: "{{ hostvars[groups['controlplane'][0]]['k3s_server_url'] }}"
+
+- name: Check if k3s-agent is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_agent_binary
+
+- name: Create k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+- name: Create k3s agent config BEFORE installation
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0644"
+  notify: Restart k3s-agent
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+  when: not k3s_agent_binary.stat.exists
+
+- name: Install k3s agent
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_URL: "{{ k3s_server_url }}"
+    K3S_TOKEN: "{{ k3s_server_token }}"
+  ansible.builtin.command: /tmp/k3s-install.sh agent
+  args:
+    creates: /usr/local/bin/k3s
+  register: k3s_agent_install
+
+- name: Wait for agent to join cluster
+  delegate_to: "{{ groups['controlplane'][0] }}"
+  ansible.builtin.command: k3s kubectl get node {{ inventory_hostname }}
+  register: k3s_agent_node_joined
+  until: k3s_agent_node_joined.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false

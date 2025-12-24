@@ -1,0 +1,8 @@
+# K3s agent configuration
+
+server: "{{ k3s_server_url }}"
+token: "{{ k3s_server_token }}"
+
+# Kubelet args for Longhorn
+kubelet-arg:
+  - "max-pods=110"

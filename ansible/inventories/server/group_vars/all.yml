@@ -1,0 +1,72 @@
+---
+# Server-specific overrides
+target_environment: server
+
+# OS packages to install
+base_packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - btop
+  - vim
+  - tmux
+  - jq
+  - yq
+  - unzip
+  - python3-pip
+  - open-iscsi
+  - nfs-common
+  - cryptsetup
+
+# Kernel modules for K3s and Longhorn
+kernel_modules:
+  - br_netfilter
+  - overlay
+  - iscsi_tcp
+  - dm_crypt
+
+# Sysctl settings
+sysctl_settings:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+  fs.inotify.max_user_instances: 8192
+  fs.inotify.max_user_watches: 524288
+
+# Helm charts to deploy
+helm_charts:
+  longhorn:
+    name: longhorn
+    repo: https://charts.longhorn.io
+    chart: longhorn/longhorn
+    namespace: longhorn-system
+    version: "1.7.2"
+
+  metallb:
+    name: metallb
+    repo: https://metallb.github.io/metallb
+    chart: metallb/metallb
+    namespace: metallb-system
+    version: "0.14.9"
+
+  ingress_nginx:
+    name: ingress-nginx
+    repo: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    namespace: ingress-nginx
+    version: "4.11.3"
+
+  prometheus:
+    name: prometheus
+    repo: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-community/kube-prometheus-stack
+    namespace: monitoring
+    version: "66.3.1"
+
+# Ingress hostnames
+ingress_hosts:
+  grafana: grafana.local
+  prometheus: prometheus.local
+  alertmanager: alertmanager.local
+  longhorn: longhorn.local

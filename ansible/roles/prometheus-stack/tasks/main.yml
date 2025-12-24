@@ -1,0 +1,71 @@
+---
+- name: Add prometheus-community Helm repo
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: https://prometheus-community.github.io/helm-charts
+    state: present
+
+- name: Create monitoring namespace
+  kubernetes.core.k8s:
+    name: monitoring
+    api_version: v1
+    kind: Namespace
+    state: present
+    definition:
+      metadata:
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
+
+- name: Deploy kube-prometheus-stack
+  kubernetes.core.helm:
+    name: prometheus
+    chart_ref: prometheus-community/kube-prometheus-stack
+    chart_version: "{{ helm_charts.prometheus.version | default('66.3.1') }}"
+    release_namespace: monitoring
+    create_namespace: false
+    values: "{{ lookup('file', playbook_dir + '/../files/helm-values/prometheus.yml') | from_yaml }}"
+    wait: true
+    wait_timeout: 600s
+
+- name: Create monitoring ingresses
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: monitoring-ingress
+        namespace: monitoring
+      spec:
+        ingressClassName: nginx
+        rules:
+          - host: "{{ ingress_hosts.grafana | default('grafana.local') }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: prometheus-grafana
+                      port:
+                        number: 80
+          - host: "{{ ingress_hosts.prometheus | default('prometheus.local') }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: prometheus-kube-prometheus-prometheus
+                      port:
+                        number: 9090
+          - host: "{{ ingress_hosts.alertmanager | default('alertmanager.local') }}"
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: prometheus-kube-prometheus-alertmanager
+                      port:
+                        number: 9093

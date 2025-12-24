@@ -1,0 +1,60 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ kernel_modules | default([]) }}"
+
+- name: Ensure kernel modules load on boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k3s.conf
+    content: |
+      {% for mod in kernel_modules | default([]) %}
+      {{ mod }}
+      {% endfor %}
+    mode: "0644"
+
+- name: Write sysctl settings file
+  ansible.builtin.template:
+    src: sysctl-kubernetes.conf.j2
+    dest: /etc/sysctl.d/99-kubernetes.conf
+    mode: "0644"
+  when: sysctl_settings is defined
+  notify: Reload sysctl
+
+- name: Apply sysctl settings immediately
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-kubernetes.conf
+  changed_when: true
+  failed_when: false
+  when: sysctl_settings is defined
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update /etc/hosts
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    mode: "0644"
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ timezone | default('America/Chicago') }}"
+
+- name: Enable and start iscsid (for Longhorn)
+  ansible.builtin.systemd:
+    name: iscsid
+    state: started
+    enabled: true
+  when: "'open-iscsi' in base_packages"

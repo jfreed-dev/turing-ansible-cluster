@@ -1,0 +1,105 @@
+---
+- name: Create portainer namespace
+  kubernetes.core.k8s:
+    name: portainer
+    api_version: v1
+    kind: Namespace
+    state: present
+    definition:
+      metadata:
+        labels:
+          pod-security.kubernetes.io/enforce: privileged
+
+- name: Create Portainer ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: portainer-sa
+        namespace: portainer
+
+- name: Create Portainer ClusterRoleBinding
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: portainer-crb
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: cluster-admin
+      subjects:
+        - kind: ServiceAccount
+          name: portainer-sa
+          namespace: portainer
+
+- name: Deploy Portainer Agent
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: portainer-agent
+        namespace: portainer
+      spec:
+        selector:
+          matchLabels:
+            app: portainer-agent
+        template:
+          metadata:
+            labels:
+              app: portainer-agent
+          spec:
+            serviceAccountName: portainer-sa
+            containers:
+              - name: agent
+                image: portainer/agent:2.33.6
+                imagePullPolicy: IfNotPresent
+                env:
+                  - name: AGENT_CLUSTER_ADDR
+                    value: portainer-agent
+                  - name: KUBERNETES_POD_IP
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: status.podIP
+                  - name: LOG_LEVEL
+                    value: DEBUG
+                ports:
+                  - containerPort: 9001
+                    protocol: TCP
+                volumeMounts:
+                  - name: docker-sock
+                    mountPath: /var/run/docker.sock
+                  - name: host-root
+                    mountPath: /host
+            volumes:
+              - name: docker-sock
+                hostPath:
+                  path: /var/run/docker.sock
+              - name: host-root
+                hostPath:
+                  path: /
+
+- name: Create Portainer Service
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: portainer-agent
+        namespace: portainer
+      spec:
+        type: LoadBalancer
+        loadBalancerIP: "{{ portainer_lb_ip | default('10.10.88.81') }}"
+        ports:
+          - port: 9001
+            targetPort: 9001
+            protocol: TCP
+        selector:
+          app: portainer-agent

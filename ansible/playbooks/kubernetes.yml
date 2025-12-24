@@ -1,0 +1,41 @@
+---
+# Install K3s on cluster nodes
+# Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/kubernetes.yml
+
+- name: Install K3s server (control plane)
+  hosts: controlplane
+  become: true
+  serial: 1
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+  roles:
+    - k3s-server
+
+- name: Install K3s agents (workers)
+  hosts: workers
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+  roles:
+    - k3s-agent
+
+- name: Verify cluster
+  hosts: controlplane
+  become: true
+  tasks:
+    - name: Get cluster nodes
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      register: kubernetes_cluster_nodes
+      changed_when: false
+
+    - name: Display cluster status
+      ansible.builtin.debug:
+        msg: "{{ kubernetes_cluster_nodes.stdout_lines }}"
+
+    - name: Verify all nodes ready
+      ansible.builtin.command: k3s kubectl wait --for=condition=Ready nodes --all --timeout=300s
+      changed_when: false
+
+    - name: Display kubeconfig location
+      ansible.builtin.debug:
+        msg: "Kubeconfig saved to: {{ playbook_dir }}/../kubeconfig"

@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install ansible ansible-lint yamllint
+
+      - name: Run yamllint
+        working-directory: ansible
+        run: |
+          yamllint -c ../.yamllint .
+        continue-on-error: true
+
+      - name: Run ansible-lint
+        working-directory: ansible
+        run: |
+          ansible-lint
+
+  syntax-check:
+    name: Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible
+        run: |
+          pip install ansible
+
+      - name: Install Galaxy requirements
+        working-directory: ansible
+        run: |
+          ansible-galaxy install -r requirements.yml --force
+        continue-on-error: true
+
+      - name: Syntax check all playbooks
+        working-directory: ansible
+        run: |
+          for playbook in playbooks/*.yml; do
+            echo "Checking $playbook..."
+            ansible-playbook --syntax-check "$playbook" || exit 1
+          done
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5'
+
+      - name: Terraform Format Check
+        working-directory: terraform
+        run: |
+          terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        working-directory: terraform/environments/server
+        run: |
+          terraform init -backend=false
+          terraform validate

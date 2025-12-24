@@ -1,0 +1,23 @@
+# Ansible-lint configuration
+
+# Exclude downloaded Galaxy roles
+exclude_paths:
+  - .ansible/
+  - .cache/
+
+# Skip these rules for specific patterns
+skip_list:
+  - role-name  # Allow hyphens in role names (common convention)
+
+# Warn on these instead of failing
+warn_list:
+  - yaml[line-length]
+
+# Enable offline mode for faster runs
+offline: true
+
+# Use default rules
+use_default_rules: true
+
+# Profiles: min, basic, moderate, safety, shared, production
+profile: production

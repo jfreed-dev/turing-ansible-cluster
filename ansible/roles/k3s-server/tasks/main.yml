@@ -1,0 +1,68 @@
+---
+- name: Check if k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_server_binary
+
+- name: Create k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+- name: Create k3s server config BEFORE installation
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0644"
+  notify: Restart k3s
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: "0755"
+  when: not k3s_server_binary.stat.exists
+
+- name: Install k3s server
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_TOKEN: "{{ k3s_cluster_token }}"
+  ansible.builtin.command: /tmp/k3s-install.sh server
+  args:
+    creates: /usr/local/bin/k3s
+  register: k3s_server_install
+
+- name: Wait for k3s to be ready
+  ansible.builtin.command: k3s kubectl get nodes
+  register: k3s_server_ready
+  until: k3s_server_ready.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Get k3s node token
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_server_node_token
+
+- name: Set k3s token fact for agents
+  ansible.builtin.set_fact:
+    k3s_server_token: "{{ k3s_server_node_token.content | b64decode | trim }}"
+    k3s_server_url: "https://{{ ansible_host }}:6443"
+
+- name: Fetch kubeconfig
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ playbook_dir }}/../kubeconfig"
+    flat: true
+  run_once: true
+
+- name: Update kubeconfig server address
+  delegate_to: localhost
+  become: false
+  ansible.builtin.replace:
+    path: "{{ playbook_dir }}/../kubeconfig"
+    regexp: 'https://127.0.0.1:6443'
+    replace: "https://{{ ansible_host }}:6443"
+  run_once: true

@@ -1,0 +1,12 @@
+---
+# Master playbook - deploys full K3s cluster with addons
+# Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/site.yml
+
+- name: Bootstrap all nodes
+  import_playbook: bootstrap.yml
+
+- name: Deploy Kubernetes
+  import_playbook: kubernetes.yml
+
+- name: Deploy cluster addons
+  import_playbook: addons.yml

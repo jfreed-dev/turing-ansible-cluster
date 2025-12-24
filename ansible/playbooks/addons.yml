@@ -1,0 +1,62 @@
+---
+# Deploy Kubernetes addons via Helm
+# Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/addons.yml
+
+- name: Deploy cluster addons
+  hosts: controlplane
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  pre_tasks:
+    - name: Install Helm
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+        executable: /bin/bash
+
+    - name: Install Python kubernetes module
+      ansible.builtin.apt:
+        name:
+          - python3-kubernetes
+          - python3-yaml
+        state: present
+
+  roles:
+    - metallb
+    - nginx-ingress
+    - prometheus-stack
+    - longhorn
+    - portainer
+
+  post_tasks:
+    - name: Display addon status
+      ansible.builtin.command: k3s kubectl get pods -A
+      register: addons_all_pods
+      changed_when: false
+
+    - name: Show running pods
+      ansible.builtin.debug:
+        msg: "{{ addons_all_pods.stdout_lines }}"
+
+    - name: Display access information
+      ansible.builtin.debug:
+        msg: |
+          Cluster addons deployed successfully!
+
+          Add to /etc/hosts:
+          {{ ingress_ip }}  grafana.local prometheus.local alertmanager.local longhorn.local
+
+          Access:
+          - Grafana: http://grafana.local (admin/admin)
+          - Prometheus: http://prometheus.local
+          - AlertManager: http://alertmanager.local
+          - Longhorn: http://longhorn.local
+          - Portainer: Connect agent at {{ portainer_server }}:{{ portainer_port }}

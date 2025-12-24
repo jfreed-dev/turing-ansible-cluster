@@ -1,0 +1,48 @@
+---
+- name: Add ingress-nginx Helm repo
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
+    repo_url: https://kubernetes.github.io/ingress-nginx
+    state: present
+
+- name: Create ingress-nginx namespace
+  kubernetes.core.k8s:
+    name: ingress-nginx
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Deploy ingress-nginx
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    chart_version: "{{ helm_charts.ingress_nginx.version | default('4.11.3') }}"
+    release_namespace: ingress-nginx
+    create_namespace: false
+    values:
+      controller:
+        service:
+          type: LoadBalancer
+          loadBalancerIP: "{{ ingress_ip }}"
+        ingressClassResource:
+          default: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+    wait: true
+    wait_timeout: 300s
+
+- name: Wait for ingress controller
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    namespace: ingress-nginx
+    name: ingress-nginx-controller
+  register: ingress_controller
+  until: ingress_controller.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10

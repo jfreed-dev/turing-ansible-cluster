@@ -1,0 +1,78 @@
+---
+# Install RKNN toolkit and NPU support (server only)
+# Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/npu-setup.yml
+
+- name: Setup NPU/RKNN on RK3588 nodes
+  hosts: npu_nodes
+  become: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+
+  pre_tasks:
+    - name: Check if NPU installation is enabled
+      ansible.builtin.fail:
+        msg: "NPU installation disabled. Set install_rknn: true in inventory."
+      when: not (install_rknn | default(false))
+
+    - name: Verify this is an RK3588 device
+      ansible.builtin.shell: |
+        set -o pipefail
+        cat /proc/device-tree/model 2>/dev/null || echo "unknown"
+      args:
+        executable: /bin/bash
+      register: npu_device_model
+      changed_when: false
+
+    - name: Display device model
+      ansible.builtin.debug:
+        msg: "Device: {{ npu_device_model.stdout }}"
+
+  roles:
+    - rknn
+
+  post_tasks:
+    - name: Test RKNN installation
+      ansible.builtin.shell: |
+        set -o pipefail
+        python3 -c "import numpy; print('NumPy:', numpy.__version__)"
+        ls -la /usr/lib/librknnrt.so 2>/dev/null && echo "RKNN Runtime: installed"
+      args:
+        executable: /bin/bash
+      register: npu_rknn_test
+      changed_when: false
+      failed_when: false
+
+    - name: Display RKNN status
+      ansible.builtin.debug:
+        msg: "{{ npu_rknn_test.stdout_lines }}"
+
+    - name: NPU setup summary
+      ansible.builtin.debug:
+        msg: |
+          NPU Setup Complete!
+
+          Installed (runtime only, ~800MB):
+          - RKNN-LLM runtime at /opt/rknn-llm
+          - rkllama server at /opt/rkllama
+          - librknnrt.so at /usr/lib/
+
+          NPU Device: /dev/dri/renderD129 (via DRM subsystem)
+          Driver: rknpu v0.9.8+
+
+          Quick Start - Run LLM on NPU:
+
+          1. Download a model from HuggingFace:
+             huggingface-cli download VRxiaojie/DeepSeek-R1-Distill-Qwen-1.5B-RK3588S-RKLLM1.1.4 \
+               --local-dir /tmp/model
+
+          2. Start the rkllama server:
+             cd /opt/rkllama
+             python3 server.py --target_platform rk3588 --port 8080
+
+          3. Check NPU status:
+             cat /sys/kernel/debug/rknpu/version
+             cat /sys/kernel/debug/rknpu/load
+
+          Note: Dev tools (rknn-toolkit2, ezrknpu) not installed.
+          For model conversion, use a separate dev machine.
