@@ -63,12 +63,16 @@ jobs:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 4096
+          root-reserve-mb: 2048
           swap-size-mb: 1024
+          build-mount-path: /build
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
+
+      - name: Check available space
+        run: df -h
 
       - name: Install dependencies
         run: |
@@ -82,11 +86,11 @@ jobs:
 
       - name: Clone Armbian build framework
         run: |
-          git clone --depth=1 https://github.com/armbian/build armbian-build
+          git clone --depth=1 https://github.com/armbian/build /build/armbian-build
 
       - name: Build Armbian image
         run: |
-          cd armbian-build
+          cd /build/armbian-build
           ./compile.sh build \
             BOARD=turing-rk1 \
             BRANCH=vendor \
@@ -95,6 +99,13 @@ jobs:
             BUILD_DESKTOP=no \
             KERNEL_CONFIGURE=no \
             COMPRESS_OUTPUTIMAGE=xz,sha
+
+          # Copy output to workspace
+          mkdir -p $GITHUB_WORKSPACE/armbian-build/output/images
+          cp -v /build/armbian-build/output/images/*.img.xz $GITHUB_WORKSPACE/armbian-build/output/images/ || true
+          cp -v /build/armbian-build/output/images/*.sha $GITHUB_WORKSPACE/armbian-build/output/images/ || true
+          cp -v /build/armbian-build/output/images/*.txt $GITHUB_WORKSPACE/armbian-build/output/images/ || true
+          ls -la $GITHUB_WORKSPACE/armbian-build/output/images/
 
       - name: Extract image metadata
         id: metadata
