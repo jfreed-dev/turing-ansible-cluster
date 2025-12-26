@@ -74,6 +74,14 @@ jobs:
       - name: Check available space
         run: df -h
 
+      - name: Move Docker to larger partition
+        run: |
+          sudo systemctl stop docker
+          sudo mv /var/lib/docker /build/docker
+          sudo ln -s /build/docker /var/lib/docker
+          sudo systemctl start docker
+          df -h
+
       - name: Install dependencies
         run: |
           sudo apt-get update
