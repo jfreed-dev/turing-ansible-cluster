@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2025-12-26
+
+### Added
+
+- Google Drive image distribution scripts
+  - `scripts/upload-armbian-image.sh` - Upload images with rclone, auto-compression, checksums
+  - `scripts/download-armbian-image.sh` - Download with gdown/rclone/curl, checksum verification
+- Image Distribution section in `docs/ARMBIAN-BUILD.md`
+- Image Distribution quick reference in README
+
 ## [1.1.5] - 2025-12-26
 
 ### Changed
@@ -111,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.1.6]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.4...v1.1.5
 [1.1.4]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.3...v1.1.4
 [1.1.3]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.2...v1.1.3
