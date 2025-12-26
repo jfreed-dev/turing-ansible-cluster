@@ -168,6 +168,23 @@ Output: `~/armbian-build/output/images/Armbian-*_Turing-rk1_bookworm_vendor_*.im
 
 For advanced options (custom packages, static IPs, SSH keys), see **[docs/ARMBIAN-BUILD.md](docs/ARMBIAN-BUILD.md)**.
 
+### Image Distribution
+
+Share images via Google Drive using the included scripts:
+
+```bash
+# Upload (requires rclone configured with 'gdrive' remote)
+./scripts/upload-armbian-image.sh Armbian_24.11_Turing-rk1.img.xz stable
+
+# Download (requires gdown: pip install gdown)
+./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/...'
+
+# Prepare for specific node
+./scripts/prepare-armbian-image.sh Armbian_24.11_Turing-rk1.img 1
+```
+
+See **[docs/ARMBIAN-BUILD.md#image-distribution](docs/ARMBIAN-BUILD.md#image-distribution)** for setup and full usage.
+
 ## Development
 
 ### Local Testing

@@ -309,6 +309,104 @@ If you don't need customization, download official images:
 
 > **Note**: Pre-built images may not have the latest vendor kernel with NPU support. Building your own ensures you get the `vendor` branch kernel.
 
+## Image Distribution
+
+Share Armbian builds with team members or across machines using Google Drive.
+
+### Prerequisites
+
+```bash
+# Install rclone (for uploading)
+sudo apt install rclone
+rclone config  # Setup 'gdrive' remote
+
+# Install gdown (for downloading)
+pip install gdown
+```
+
+### Upload Images
+
+Upload built images to Google Drive with automatic compression and checksums:
+
+```bash
+# Upload to date-based folder
+./scripts/upload-armbian-image.sh output/images/Armbian_24.11_Turing-rk1.img
+
+# Upload to named folder (e.g., stable, nightly)
+./scripts/upload-armbian-image.sh Armbian_24.11_Turing-rk1.img.xz stable
+
+# Custom remote and path
+RCLONE_REMOTE=mydrive GDRIVE_BASE_PATH=firmware/rk1 \
+  ./scripts/upload-armbian-image.sh image.img
+```
+
+**Features:**
+- Auto-compresses uncompressed `.img` files with xz
+- Generates SHA256 checksums
+- Returns shareable download link
+
+**Environment Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RCLONE_REMOTE` | `gdrive` | rclone remote name |
+| `GDRIVE_BASE_PATH` | `armbian-builds/turing-rk1` | Base folder in Drive |
+| `COMPRESS_LEVEL` | `6` | xz compression level (1-9) |
+
+### Download Images
+
+Download shared images with automatic checksum verification:
+
+```bash
+# Download using share link
+./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/1abc.../view?usp=sharing'
+
+# Download using file ID only
+./scripts/download-armbian-image.sh 1abcDEF123xyz
+
+# Download and auto-decompress
+DECOMPRESS=true ./scripts/download-armbian-image.sh 1abcDEF123xyz
+
+# Save to specific directory
+DOWNLOAD_DIR=/tmp ./scripts/download-armbian-image.sh 1abcDEF123xyz
+```
+
+**Features:**
+- Auto-selects best download method (gdown → rclone → curl)
+- Verifies SHA256 checksums if available
+- Optional auto-decompression
+- Shows next steps for prepare + flash
+
+**Supported URL Formats:**
+
+```
+https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+https://drive.google.com/open?id=FILE_ID
+https://drive.google.com/uc?id=FILE_ID
+FILE_ID  (just the ID string)
+```
+
+### Complete Workflow
+
+```bash
+# 1. Build image
+cd ~/armbian-build
+./compile.sh build BOARD=turing-rk1 BRANCH=vendor RELEASE=bookworm
+
+# 2. Upload to Google Drive
+./scripts/upload-armbian-image.sh output/images/Armbian-*.img stable
+# → Outputs: https://drive.google.com/file/d/1abc.../view
+
+# 3. On target machine: download
+./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/1abc...'
+
+# 4. Prepare image for specific node
+./scripts/prepare-armbian-image.sh Armbian_24.11_Turing-rk1.img 1
+
+# 5. Flash to node
+tpi flash --node 1 --image-path Armbian_24.11_Turing-rk1.img
+```
+
 ## Next Steps
 
 After building your images:
