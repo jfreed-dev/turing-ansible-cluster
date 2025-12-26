@@ -67,6 +67,13 @@ ansible-playbook -i inventories/vm/hosts.yml playbooks/site.yml
 - Templates use Jinja2 (.j2 extension)
 - Sensitive data excluded via .gitignore (no secrets in repo)
 
+## Commit Messages
+
+- Do NOT include any references to Claude, AI, or automated generation in commit messages
+- Do NOT include "Co-Authored-By" lines referencing Claude or Anthropic
+- Do NOT include emojis or "Generated with" footers
+- Keep commit messages concise and descriptive of the actual changes
+
 ## Testing
 
 ```bash
