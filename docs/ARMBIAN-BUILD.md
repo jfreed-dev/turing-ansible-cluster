@@ -50,7 +50,54 @@ See [Image Preparation](#image-preparation) for full details on the prepare scri
 
 See [images.json](../images.json) for full metadata including download URLs and checksums.
 
-> **Note**: The automated build workflow checks daily for new Armbian versions and publishes updated images to [GitHub Releases](https://github.com/jfreed-dev/turing-ansible-cluster/releases).
+> **Note**: The automated build workflow checks daily for new Armbian versions and uploads images to Google Drive.
+
+## Automated Build Setup (Maintainers)
+
+The GitHub Actions workflow automatically builds and uploads images to Google Drive when new Armbian versions are released.
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `GDRIVE_SERVICE_ACCOUNT` | Google Cloud service account JSON key |
+| `GDRIVE_FOLDER_ID` | Google Drive folder ID for uploads |
+
+### Setup Steps
+
+1. **Create Google Cloud Service Account**:
+   ```bash
+   # Create project (or use existing)
+   gcloud projects create armbian-builds --name="Armbian Builds"
+   gcloud config set project armbian-builds
+
+   # Enable Drive API
+   gcloud services enable drive.googleapis.com
+
+   # Create service account
+   gcloud iam service-accounts create armbian-uploader \
+     --display-name="Armbian Build Uploader"
+
+   # Download JSON key
+   gcloud iam service-accounts keys create service-account.json \
+     --iam-account=armbian-uploader@armbian-builds.iam.gserviceaccount.com
+   ```
+
+2. **Share Google Drive folder with service account**:
+   - Create a folder in Google Drive for builds
+   - Right-click → Share → Add the service account email (e.g., `armbian-uploader@armbian-builds.iam.gserviceaccount.com`)
+   - Give "Editor" permissions
+   - Copy the folder ID from the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+
+3. **Add secrets to GitHub repository**:
+   - Go to repository Settings → Secrets and variables → Actions
+   - Add `GDRIVE_SERVICE_ACCOUNT`: paste entire contents of `service-account.json`
+   - Add `GDRIVE_FOLDER_ID`: paste the folder ID from step 2
+
+4. **Trigger a build**:
+   ```bash
+   gh workflow run armbian-build.yml -f force_build=true
+   ```
 
 ## Prerequisites
 
