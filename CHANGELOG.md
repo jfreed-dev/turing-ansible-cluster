@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2025-12-26
+
+### Added
+
+- Node recovery playbook (`playbooks/recover-node.yml`)
+  - Cleans up stale K3s node password secrets
+  - Removes stale Longhorn disk entries
+  - Re-registers nodes with cluster
+  - Configures Longhorn storage automatically
+  - Usage: `ansible-playbook playbooks/recover-node.yml --limit node3`
+
+### Changed
+
+- Improved `base` role
+  - Added role defaults for packages and kernel modules
+  - Enhanced iSCSI configuration with socket and initiator setup
+  - Fixed hostname persistence in /etc/hostname
+
+- Improved `k3s-prereq` role
+  - Auto-detects NVMe boot vs eMMC boot scenarios
+  - Handles post-migration partition layout (nvme0n1p1=root, nvme0n1p2=longhorn)
+  - Better idempotency for storage configuration
+
+- Improved `k3s-agent` role
+  - Added service existence check before restart
+  - Waits for node to reach Ready state
+  - Creates node password directory
+
+- Improved `bootstrap.yml` playbook
+  - Added pre-flight checks (memory, architecture, NVMe)
+  - Post-bootstrap verification of iSCSI and storage
+  - Better logging of configuration state
+
 ## [1.1.7] - 2025-12-26
 
 ### Changed
@@ -136,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.1.8]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.5...v1.1.6
 [1.1.5]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.4...v1.1.5

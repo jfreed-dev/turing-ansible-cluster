@@ -23,9 +23,83 @@
     mode: "0644"
   when: private_registries is defined
 
-- name: Setup NVMe storage for Longhorn
-  when: has_nvme | default(false)
+# Check if system is already booted from NVMe (post-migration)
+- name: Check current boot device
+  ansible.builtin.shell: |
+    findmnt -n -o SOURCE / | grep -q nvme && echo "nvme" || echo "emmc"
+  register: k3s_prereq_boot_device
+  changed_when: false
+
+- name: Check if Longhorn partition exists
+  ansible.builtin.stat:
+    path: "{{ longhorn_path }}"
+  register: k3s_prereq_longhorn_dir
+
+# Handle NVMe boot scenario (already migrated - root on nvme0n1p1, longhorn on nvme0n1p2)
+- name: Configure Longhorn for NVMe boot system
+  when:
+    - has_nvme | default(false)
+    - k3s_prereq_boot_device.stdout == 'nvme'
   block:
+    - name: Ensure Longhorn mount point exists
+      ansible.builtin.file:
+        path: "{{ longhorn_path }}"
+        state: directory
+        mode: "0755"
+
+    - name: Check if Longhorn partition is already mounted
+      ansible.builtin.shell: |
+        findmnt -n {{ longhorn_path }} 2>/dev/null && echo "mounted" || echo "not_mounted"
+      register: k3s_prereq_longhorn_mounted
+      changed_when: false
+
+    - name: Mount Longhorn partition if not mounted
+      ansible.posix.mount:
+        path: "{{ longhorn_path }}"
+        src: "{{ nvme_device | default('/dev/nvme0n1') }}p2"
+        fstype: xfs
+        opts: defaults,nofail
+        state: mounted
+      when: k3s_prereq_longhorn_mounted.stdout == 'not_mounted'
+
+    - name: Create K3s data directory on Longhorn partition
+      ansible.builtin.file:
+        path: "{{ longhorn_path }}/rancher"
+        state: directory
+        mode: "0755"
+
+    - name: Check if /var/lib/rancher is already configured
+      ansible.builtin.stat:
+        path: /var/lib/rancher
+      register: k3s_prereq_rancher_dir
+
+    - name: Remove existing /var/lib/rancher directory (if not symlink)
+      ansible.builtin.file:
+        path: /var/lib/rancher
+        state: absent
+      when:
+        - k3s_prereq_rancher_dir.stat.exists
+        - not k3s_prereq_rancher_dir.stat.islnk
+
+    - name: Create symlink for K3s data to Longhorn partition
+      ansible.builtin.file:
+        src: "{{ longhorn_path }}/rancher"
+        dest: /var/lib/rancher
+        state: link
+      when: k3s_role | default('agent') == 'agent'
+
+# Handle eMMC boot with NVMe for storage (pre-migration)
+- name: Setup NVMe storage for Longhorn (eMMC boot)
+  when:
+    - has_nvme | default(false)
+    - k3s_prereq_boot_device.stdout == 'emmc'
+  block:
+    - name: Check if NVMe is already partitioned
+      ansible.builtin.shell: |
+        lsblk -n -o NAME {{ nvme_device | default('/dev/nvme0n1') }} 2>/dev/null | grep -q p1 && echo "partitioned" || echo "raw"
+      register: k3s_prereq_nvme_state
+      changed_when: false
+
     - name: Create partition on NVMe (if not exists)
       community.general.parted:
         device: "{{ nvme_device | default('/dev/nvme0n1') }}"
@@ -33,13 +107,14 @@
         state: present
         fs_type: ext4
       register: k3s_prereq_nvme_partition
+      when: k3s_prereq_nvme_state.stdout == 'raw'
 
     - name: Format NVMe partition  # noqa: no-handler
       community.general.filesystem:
         dev: "{{ nvme_device | default('/dev/nvme0n1') }}p1"
         fstype: ext4
         force: false
-      when: k3s_prereq_nvme_partition.changed
+      when: k3s_prereq_nvme_partition.changed | default(false)
 
     - name: Create Longhorn mount point
       ansible.builtin.file:
@@ -79,6 +154,7 @@
         dest: /var/lib/rancher
         state: link
 
+# Handle nodes without NVMe
 - name: Create Longhorn directory (non-NVMe nodes)
   ansible.builtin.file:
     path: "{{ longhorn_path }}"

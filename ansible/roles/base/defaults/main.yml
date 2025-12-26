@@ -1,0 +1,38 @@
+---
+# Base role defaults
+
+# Packages required for K3s and Longhorn
+base_packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - vim
+  - jq
+  - unzip
+  - python3-pip
+  # Longhorn requirements
+  - open-iscsi
+  - nfs-common
+  - cryptsetup
+  # Useful utilities
+  - tmux
+  - rsync
+
+# Kernel modules required for K3s networking and storage
+kernel_modules:
+  - br_netfilter
+  - overlay
+  - iscsi_tcp
+
+# Sysctl settings for Kubernetes
+sysctl_settings:
+  net.bridge.bridge-nf-call-iptables: 1
+  net.bridge.bridge-nf-call-ip6tables: 1
+  net.ipv4.ip_forward: 1
+  net.ipv4.conf.all.forwarding: 1
+  fs.inotify.max_user_watches: 524288
+  fs.inotify.max_user_instances: 512
+
+# Default timezone
+timezone: America/Chicago

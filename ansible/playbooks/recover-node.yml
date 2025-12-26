@@ -1,0 +1,309 @@
+---
+# Recover a node after reimaging or failure
+# This playbook cleans up stale cluster state and re-registers the node
+#
+# Usage:
+#   ansible-playbook -i inventories/server/hosts.yml playbooks/recover-node.yml --limit node3
+#   ansible-playbook -i inventories/server/hosts.yml playbooks/recover-node.yml --limit node3 -e force_reinstall=true
+#
+# Options:
+#   force_reinstall: true  - Force reinstall K3s even if binary exists
+#   skip_cleanup: true     - Skip cluster cleanup (if node was never registered)
+#   skip_longhorn: true    - Skip Longhorn disk configuration
+
+- name: Clean up stale cluster state
+  hosts: controlplane
+  become: true
+  gather_facts: false
+  run_once: true
+
+  vars:
+    target_nodes: "{{ ansible_play_hosts_all | difference(groups['controlplane']) }}"
+
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Identify target nodes for recovery
+      ansible.builtin.debug:
+        msg: "Recovering nodes: {{ target_nodes }}"
+
+    - name: Check for stale K3s node password secrets
+      ansible.builtin.command: >
+        k3s kubectl get secret -n kube-system -o name
+      register: recover_k3s_secrets
+      changed_when: false
+      when: not (skip_cleanup | default(false))
+
+    - name: Delete stale node password secrets
+      ansible.builtin.command: >
+        k3s kubectl delete secret -n kube-system {{ item }}.node-password.k3s
+      loop: "{{ target_nodes }}"
+      when:
+        - not (skip_cleanup | default(false))
+        - (item + '.node-password.k3s') in recover_k3s_secrets.stdout
+      register: recover_delete_secret
+      failed_when: false
+      changed_when: recover_delete_secret.rc == 0
+
+    - name: Check for stale K3s node registrations
+      ansible.builtin.command: >
+        k3s kubectl get node {{ item }} -o name
+      loop: "{{ target_nodes }}"
+      register: recover_k3s_nodes
+      failed_when: false
+      changed_when: false
+      when: not (skip_cleanup | default(false))
+
+    - name: Delete stale node registrations
+      ansible.builtin.command: >
+        k3s kubectl delete node {{ item.item }}
+      loop: "{{ recover_k3s_nodes.results | default([]) }}"
+      when:
+        - not (skip_cleanup | default(false))
+        - item.rc == 0
+      failed_when: false
+      changed_when: true
+
+    - name: Check Longhorn node state
+      ansible.builtin.command: >
+        k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item }} -o jsonpath='{.spec.evictionRequested}'
+      loop: "{{ target_nodes }}"
+      register: recover_longhorn_nodes
+      failed_when: false
+      changed_when: false
+      when: not (skip_longhorn | default(false))
+
+    - name: Cancel Longhorn eviction for recovered nodes
+      ansible.builtin.command: >
+        k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item.item }}
+        --type=merge -p '{"spec":{"evictionRequested":false}}'
+      loop: "{{ recover_longhorn_nodes.results | default([]) }}"
+      when:
+        - not (skip_longhorn | default(false))
+        - item.rc == 0
+        - item.stdout == 'true'
+      failed_when: false
+      changed_when: true
+
+    - name: Get Longhorn disk status for nodes
+      ansible.builtin.shell: |
+        k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item }} \
+          -o jsonpath='{range .spec.disks.*}{.path}:{@}{"\n"}{end}' 2>/dev/null || true
+      loop: "{{ target_nodes }}"
+      register: recover_longhorn_disks
+      changed_when: false
+      when: not (skip_longhorn | default(false))
+
+    - name: Display Longhorn disk state
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.stdout_lines | default(['No disks configured']) }}"
+      loop: "{{ recover_longhorn_disks.results | default([]) }}"
+      when: not (skip_longhorn | default(false))
+
+
+- name: Prepare recovered node
+  hosts: workers:&{{ ansible_limit | default('all') }}
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
+
+  pre_tasks:
+    - name: Wait for node to be reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Display recovery target
+      ansible.builtin.debug:
+        msg: "Recovering {{ inventory_hostname }} ({{ ansible_host }})"
+
+  tasks:
+    - name: Stop K3s agent if running
+      ansible.builtin.systemd:
+        name: k3s-agent
+        state: stopped
+      failed_when: false
+
+    - name: Clean K3s agent state for fresh registration
+      when: force_reinstall | default(false)
+      block:
+        - name: Remove K3s agent data
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/rancher/node/password
+            - /var/lib/rancher/k3s/agent/client-ca.crt
+            - /var/lib/rancher/k3s/agent/client-k3s-controller.crt
+            - /var/lib/rancher/k3s/agent/client-k3s-controller.key
+            - /var/lib/rancher/k3s/agent/client-kubelet.crt
+            - /var/lib/rancher/k3s/agent/client-kubelet.key
+            - /var/lib/rancher/k3s/agent/serving-kubelet.crt
+            - /var/lib/rancher/k3s/agent/serving-kubelet.key
+
+        - name: Uninstall K3s agent
+          ansible.builtin.command: /usr/local/bin/k3s-agent-uninstall.sh
+          args:
+            removes: /usr/local/bin/k3s
+          failed_when: false
+
+  roles:
+    - base
+    - k3s-prereq
+    - k3s-agent
+
+  post_tasks:
+    - name: Verify node joined cluster
+      delegate_to: "{{ groups['controlplane'][0] }}"
+      ansible.builtin.command: k3s kubectl get node {{ inventory_hostname }} -o wide
+      register: recover_node_status
+      changed_when: false
+
+    - name: Display node status
+      ansible.builtin.debug:
+        msg: "{{ recover_node_status.stdout }}"
+
+
+- name: Configure Longhorn storage on recovered node
+  hosts: controlplane
+  become: true
+  gather_facts: false
+  run_once: true
+
+  vars:
+    target_nodes: "{{ ansible_play_hosts_all | difference(groups['controlplane']) }}"
+
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Wait for Longhorn manager on recovered nodes
+      ansible.builtin.command: >
+        k3s kubectl get pods -n longhorn-system -l app=longhorn-manager
+        --field-selector spec.nodeName={{ item }} -o jsonpath='{.items[0].status.phase}'
+      loop: "{{ target_nodes }}"
+      register: recover_longhorn_manager
+      until: recover_longhorn_manager.stdout == 'Running'
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: not (skip_longhorn | default(false))
+
+    - name: Check if nodes need disk cleanup
+      ansible.builtin.shell: |
+        k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item }} \
+          -o jsonpath='{.status.diskStatus}' 2>/dev/null | \
+          grep -q "diskUUID doesn't match" && echo "needs_cleanup" || echo "ok"
+      loop: "{{ target_nodes }}"
+      register: recover_disk_status
+      changed_when: false
+      when: not (skip_longhorn | default(false))
+
+    - name: Get old disk names for cleanup
+      ansible.builtin.shell: |
+        k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item.item }} \
+          -o jsonpath='{range .spec.disks.*}{@.path}|{end}' 2>/dev/null | tr '|' '\n' | head -1
+      loop: "{{ recover_disk_status.results | default([]) }}"
+      register: recover_old_disks
+      when:
+        - not (skip_longhorn | default(false))
+        - item.stdout | default('') == 'needs_cleanup'
+      changed_when: false
+
+    - name: Remove stale Longhorn disks
+      ansible.builtin.shell: |
+        # Get disk names and remove them
+        DISKS=$(k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
+          -o jsonpath='{.spec.disks}' | jq -r 'keys[]')
+        for disk in $DISKS; do
+          k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
+            --type=json -p="[{\"op\": \"replace\", \"path\": \"/spec/disks/$disk/allowScheduling\", \"value\": false}]" || true
+          sleep 2
+          k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
+            --type=json -p="[{\"op\": \"remove\", \"path\": \"/spec/disks/$disk\"}]" || true
+        done
+      loop: "{{ recover_disk_status.results | default([]) }}"
+      when:
+        - not (skip_longhorn | default(false))
+        - item.stdout | default('') == 'needs_cleanup'
+      changed_when: true
+
+    - name: Wait for disk sync
+      ansible.builtin.pause:
+        seconds: 10
+      when:
+        - not (skip_longhorn | default(false))
+        - recover_disk_status.results | selectattr('stdout', 'defined') | selectattr('stdout', 'equalto', 'needs_cleanup') | list | length > 0
+
+    - name: Add Longhorn disk to recovered nodes
+      ansible.builtin.command: >
+        k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item }}
+        --type=merge -p '{"spec":{"allowScheduling":true,"evictionRequested":false,"disks":{"nvme-longhorn":{"path":"/var/lib/longhorn","allowScheduling":true,"storageReserved":0,"tags":[]}}}}'
+      loop: "{{ target_nodes }}"
+      register: recover_add_disk
+      until: recover_add_disk.rc == 0
+      retries: 5
+      delay: 5
+      when: not (skip_longhorn | default(false))
+      changed_when: true
+
+    - name: Wait for Longhorn disk to be ready
+      ansible.builtin.shell: |
+        k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item }} \
+          -o jsonpath='{.status.diskStatus.nvme-longhorn.conditions[?(@.type=="Ready")].status}'
+      loop: "{{ target_nodes }}"
+      register: recover_disk_ready
+      until: recover_disk_ready.stdout == 'True'
+      retries: 30
+      delay: 10
+      when: not (skip_longhorn | default(false))
+      changed_when: false
+
+    - name: Display final Longhorn status
+      ansible.builtin.command: >
+        k3s kubectl get nodes.longhorn.io -n longhorn-system
+      register: recover_longhorn_final
+      changed_when: false
+
+    - name: Show Longhorn nodes
+      ansible.builtin.debug:
+        msg: "{{ recover_longhorn_final.stdout_lines }}"
+
+
+- name: Verify cluster health
+  hosts: controlplane
+  become: true
+  gather_facts: false
+  run_once: true
+
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+  tasks:
+    - name: Get all nodes
+      ansible.builtin.command: k3s kubectl get nodes -o wide
+      register: recover_final_nodes
+      changed_when: false
+
+    - name: Display cluster status
+      ansible.builtin.debug:
+        msg: "{{ recover_final_nodes.stdout_lines }}"
+
+    - name: Verify all nodes ready
+      ansible.builtin.command: k3s kubectl wait --for=condition=Ready nodes --all --timeout=120s
+      changed_when: false
+
+    - name: Recovery complete
+      ansible.builtin.debug:
+        msg: |
+          Node recovery complete!
+
+          Next steps:
+          - Verify pods are running: kubectl get pods -A
+          - Check Longhorn UI: http://longhorn.local
+          - Monitor node health: kubectl top nodes

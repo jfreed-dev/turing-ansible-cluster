@@ -1,6 +1,12 @@
 ---
 # Bootstrap nodes with base packages and prerequisites
 # Usage: ansible-playbook -i inventories/server/hosts.yml playbooks/bootstrap.yml
+#
+# This playbook prepares nodes for K3s installation by:
+# - Installing required packages (open-iscsi, nfs-common, etc.)
+# - Configuring kernel modules and sysctl settings
+# - Setting up NVMe storage for Longhorn (if applicable)
+# - Configuring hostname and /etc/hosts
 
 - name: Bootstrap cluster nodes
   hosts: k3s_cluster
@@ -13,7 +19,7 @@
   pre_tasks:
     - name: Display target information
       ansible.builtin.debug:
-        msg: "Bootstrapping {{ inventory_hostname }} ({{ ansible_host }})"
+        msg: "Bootstrapping {{ inventory_hostname }} ({{ ansible_host }}) - NVMe: {{ has_nvme | default(false) }}"
 
     - name: Wait for nodes to be reachable
       ansible.builtin.wait_for_connection:
@@ -22,11 +28,60 @@
     - name: Gather facts
       ansible.builtin.setup:
 
+    # Pre-flight checks
+    - name: Check minimum memory (2GB required)
+      ansible.builtin.assert:
+        that: ansible_memtotal_mb >= 2048
+        fail_msg: "Node {{ inventory_hostname }} has only {{ ansible_memtotal_mb }}MB RAM. Minimum 2048MB required."
+        success_msg: "Memory check passed: {{ ansible_memtotal_mb }}MB"
+
+    - name: Check architecture
+      ansible.builtin.assert:
+        that: ansible_architecture == 'aarch64'
+        fail_msg: "Expected aarch64 architecture, got {{ ansible_architecture }}"
+        success_msg: "Architecture check passed: {{ ansible_architecture }}"
+
+    - name: Check NVMe device exists (if configured)
+      ansible.builtin.stat:
+        path: "{{ nvme_device | default('/dev/nvme0n1') }}"
+      register: bootstrap_nvme_check
+      when: has_nvme | default(false)
+
+    - name: Warn if NVMe configured but not present
+      ansible.builtin.debug:
+        msg: "WARNING: has_nvme=true but {{ nvme_device | default('/dev/nvme0n1') }} not found!"
+      when:
+        - has_nvme | default(false)
+        - not bootstrap_nvme_check.stat.exists | default(false)
+
   roles:
     - base
     - k3s-prereq
 
   post_tasks:
+    - name: Verify iSCSI is running
+      ansible.builtin.command: systemctl is-active iscsid
+      register: bootstrap_iscsid_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display iSCSI status
+      ansible.builtin.debug:
+        msg: "iSCSI status: {{ bootstrap_iscsid_status.stdout }}"
+
+    - name: Verify Longhorn directory exists
+      ansible.builtin.stat:
+        path: "{{ longhorn_path }}"
+      register: bootstrap_longhorn_dir
+
+    - name: Display storage configuration
+      ansible.builtin.debug:
+        msg: |
+          Storage configuration for {{ inventory_hostname }}:
+          - Longhorn path: {{ longhorn_path }} (exists: {{ bootstrap_longhorn_dir.stat.exists }})
+          - NVMe configured: {{ has_nvme | default(false) }}
+          - Boot device: {{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='device') | first }}
+
     - name: Reboot if required
       ansible.builtin.reboot:
         reboot_timeout: 300
@@ -34,4 +89,4 @@
 
     - name: Bootstrap complete
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }} bootstrap complete"
+        msg: "{{ inventory_hostname }} bootstrap complete - ready for K3s installation"

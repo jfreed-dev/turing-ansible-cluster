@@ -8,6 +8,7 @@
   ansible.builtin.apt:
     name: "{{ base_packages }}"
     state: present
+  register: base_packages_installed
 
 - name: Load required kernel modules
   community.general.modprobe:
@@ -42,6 +43,12 @@
   ansible.builtin.hostname:
     name: "{{ inventory_hostname }}"
 
+- name: Update /etc/hostname file
+  ansible.builtin.copy:
+    content: "{{ inventory_hostname }}\n"
+    dest: /etc/hostname
+    mode: "0644"
+
 - name: Update /etc/hosts
   ansible.builtin.template:
     src: hosts.j2
@@ -52,9 +59,30 @@
   community.general.timezone:
     name: "{{ timezone | default('America/Chicago') }}"
 
-- name: Enable and start iscsid (for Longhorn)
-  ansible.builtin.systemd:
-    name: iscsid
-    state: started
-    enabled: true
+# iSCSI configuration for Longhorn
+- name: Configure iSCSI for Longhorn
   when: "'open-iscsi' in base_packages"
+  block:
+    - name: Ensure iscsid service is enabled and started
+      ansible.builtin.systemd:
+        name: iscsid
+        state: started
+        enabled: true
+
+    - name: Ensure iscsi socket is enabled
+      ansible.builtin.systemd:
+        name: iscsid.socket
+        state: started
+        enabled: true
+      failed_when: false
+
+    - name: Verify iSCSI initiator name exists
+      ansible.builtin.stat:
+        path: /etc/iscsi/initiatorname.iscsi
+      register: base_iscsi_initiator
+
+    - name: Generate iSCSI initiator name if missing
+      ansible.builtin.shell: |
+        echo "InitiatorName=$(iscsi-iname)" > /etc/iscsi/initiatorname.iscsi
+      when: not base_iscsi_initiator.stat.exists
+      changed_when: true
