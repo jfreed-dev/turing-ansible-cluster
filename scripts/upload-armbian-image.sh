@@ -144,17 +144,12 @@ upload_file() {
 get_share_link() {
     local remote_path="$1"
 
-    log_info "Generating shareable link..."
-
     # Get the link (this sets the file to "anyone with link can view")
     local link
     link=$(rclone link "${RCLONE_REMOTE}:${remote_path}" 2>/dev/null || true)
 
     if [[ -n "$link" ]]; then
         echo "$link"
-    else
-        log_warn "Could not generate share link automatically"
-        log_warn "You may need to share the file manually from Google Drive"
     fi
 }
 
