@@ -296,5 +296,41 @@ node1:
 |------|-------------|------------------|----------------|
 | node1 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
 | node2 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
-| node3 | eMMC (29G) | NVMe (465G) | - |
-| node4 | eMMC (29G) | NVMe (465G) | - |
+| node3 | NVMe (50G) | NVMe (415G) | 2025-12-26* |
+| node4 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
+
+\* Node3 requires BMC power cycle to complete migration
+
+## Worker Node Considerations
+
+Worker nodes may have `/var/lib/rancher` symlinked to `/var/lib/longhorn/rancher` to share the NVMe partition. After migration:
+
+### K3s Agent Fails to Start
+
+If K3s agent fails with "extracting data: no such file or directory":
+
+```bash
+# Create the required directory structure
+mkdir -p /var/lib/longhorn/rancher/k3s/data
+
+# Restart K3s agent
+systemctl restart k3s-agent
+```
+
+### Longhorn Disk UUID Mismatch
+
+After reformatting, Longhorn will show "diskUUID doesn't match". To fix:
+
+```bash
+# Disable scheduling on old disk
+kubectl -n longhorn-system patch nodes.longhorn.io <NODE_NAME> \
+  --type=json -p='[{"op": "replace", "path": "/spec/disks/<OLD_DISK_NAME>/allowScheduling", "value": false}]'
+
+# Wait a few seconds, then remove old disk
+kubectl -n longhorn-system patch nodes.longhorn.io <NODE_NAME> \
+  --type=json -p='[{"op": "remove", "path": "/spec/disks/<OLD_DISK_NAME>"}]'
+
+# Add new disk (wait for sync if needed)
+kubectl -n longhorn-system patch nodes.longhorn.io <NODE_NAME> \
+  --type=merge -p '{"spec":{"disks":{"nvme-longhorn":{"path":"/var/lib/longhorn","allowScheduling":true,"storageReserved":0,"tags":[]}}}}'
+```
