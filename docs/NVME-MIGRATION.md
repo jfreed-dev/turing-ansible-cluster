@@ -296,10 +296,10 @@ node1:
 |------|-------------|------------------|----------------|
 | node1 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
 | node2 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
-| node3 | NVMe (50G) | NVMe (415G) | 2025-12-26* |
+| node3 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
 | node4 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
 
-\* Node3 requires BMC power cycle to complete migration
+All nodes successfully migrated to NVMe boot with dual-partition layout.
 
 ## Worker Node Considerations
 
