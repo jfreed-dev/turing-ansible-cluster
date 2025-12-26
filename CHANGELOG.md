@@ -5,22 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-12-26
+
+### Changed
+
+- Migrated image storage from GitHub Releases to Cloudflare R2
+  - Custom domain: `armbian-builds.techki.to`
+  - 10GB free storage with no egress fees
+  - S3-compatible API via rclone
+- Updated workflow to use PAT token for branch protection bypass
+- Download script now fetches from Cloudflare R2
+
 ## [1.2.0] - 2025-12-26
 
 ### Added
 
 - Automated Armbian image build workflow (`.github/workflows/armbian-build.yml`)
   - Daily check for upstream armbian/build version changes
-  - Automatic build and upload to GitHub Releases
-  - QEMU setup for ARM64 cross-compilation on x86_64 runners
+  - Automatic build with QEMU ARM64 cross-compilation
   - Auto-updates `images.json` with new image metadata
 - Image metadata registry (`images.json`)
   - Tracks latest image version, checksum, download URL
   - Build history with release links
 - `--latest` flag for download script
   - Fetches image info from `images.json`
-  - Supports both GitHub Releases and Google Drive URLs
   - Automatic SHA256 verification
+- Upload/download scripts for Google Drive distribution
 
 ### Changed
 
@@ -203,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.2.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.9...v1.2.0
 [1.1.9]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.7...v1.1.8
