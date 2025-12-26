@@ -20,12 +20,12 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get commits since last tag
+          # Get commits since last tag (or all commits if first release)
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             CHANGES=$(git log --pretty=format:"- %s" $PREV_TAG..HEAD)
           else
-            CHANGES=$(git log --pretty=format:"- %s" HEAD~10..HEAD)
+            CHANGES=$(git log --pretty=format:"- %s")
           fi
           echo "changes<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
