@@ -144,7 +144,7 @@ download_with_gdown() {
 
     log_step "Downloading with gdown..."
 
-    local args=("--fuzzy" "--id" "$file_id")
+    local args=("--fuzzy" "$file_id")
 
     if [[ -n "$output" ]]; then
         args+=("-O" "$output")
