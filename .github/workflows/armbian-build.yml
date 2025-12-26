@@ -85,7 +85,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq rclone
 
       - name: Set up QEMU for ARM64 cross-compilation
         uses: docker/setup-qemu-action@v3
@@ -144,63 +144,66 @@ jobs:
           echo "SHA256: $SHA256"
           echo "Kernel: $KERNEL"
 
-      - name: Create GitHub Release
-        id: release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: armbian-${{ needs.check-version.outputs.upstream_version }}
-          name: Armbian ${{ needs.check-version.outputs.upstream_version }} for Turing RK1
-          body: |
-            ## Armbian Image for Turing RK1
+      - name: Configure rclone for Google Drive
+        env:
+          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+        run: |
+          # Create rclone config directory
+          mkdir -p ~/.config/rclone
 
-            | Property | Value |
-            |----------|-------|
-            | Version | ${{ needs.check-version.outputs.upstream_version }} |
-            | Kernel | ${{ steps.metadata.outputs.kernel }} (vendor branch) |
-            | Release | Bookworm (Debian 12) |
-            | Size | ${{ steps.metadata.outputs.size_human }} |
-            | SHA256 | `${{ steps.metadata.outputs.sha256 }}` |
+          # Write service account credentials
+          echo "$GDRIVE_SERVICE_ACCOUNT" > /tmp/service-account.json
 
-            ### Features
-            - Rockchip vendor kernel with NPU support
-            - Pre-configured for Turing Pi cluster deployment
+          # Create rclone config for Google Drive with service account
+          cat > ~/.config/rclone/rclone.conf << EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          service_account_file = /tmp/service-account.json
+          root_folder_id = ${{ secrets.GDRIVE_FOLDER_ID }}
+          EOF
 
-            ### Download & Flash
+          # Verify config
+          rclone listremotes
 
-            ```bash
-            # Download
-            wget https://github.com/${{ github.repository }}/releases/download/armbian-${{ needs.check-version.outputs.upstream_version }}/${{ steps.metadata.outputs.filename }}
+      - name: Upload to Google Drive
+        id: upload
+        run: |
+          VERSION="${{ needs.check-version.outputs.upstream_version }}"
+          FILENAME="${{ steps.metadata.outputs.filename }}"
+          IMAGE_FILE="armbian-build/output/images/$FILENAME"
 
-            # Verify checksum
-            echo "${{ steps.metadata.outputs.sha256 }}  ${{ steps.metadata.outputs.filename }}" | sha256sum -c
+          # Create version folder and upload
+          GDRIVE_PATH="armbian-builds/turing-rk1/${VERSION}"
+          rclone mkdir "gdrive:${GDRIVE_PATH}"
 
-            # Decompress
-            xz -d ${{ steps.metadata.outputs.filename }}
+          # Upload image and checksum files
+          rclone copy "$IMAGE_FILE" "gdrive:${GDRIVE_PATH}/" --progress
+          rclone copy "armbian-build/output/images/" "gdrive:${GDRIVE_PATH}/" --include "*.sha" --include "*.txt" --progress
 
-            # Prepare for node (optional - injects SSH keys, static IP)
-            ./scripts/prepare-armbian-image.sh ${IMAGE%.xz} 1
+          # Get the file ID for the uploaded image
+          FILE_INFO=$(rclone lsjson "gdrive:${GDRIVE_PATH}/${FILENAME}" 2>/dev/null | jq -r '.[0].ID // empty')
 
-            # Flash to node
-            tpi flash --node 1 --image-path ${IMAGE%.xz}
-            ```
+          if [ -n "$FILE_INFO" ]; then
+            DOWNLOAD_URL="https://drive.google.com/open?id=${FILE_INFO}"
+            echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+            echo "Uploaded to: $DOWNLOAD_URL"
+          else
+            echo "Warning: Could not get file ID, using path-based URL"
+            DOWNLOAD_URL="https://drive.google.com/drive/folders/${{ secrets.GDRIVE_FOLDER_ID }}"
+            echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          fi
 
-            ### Using the download script
-
-            ```bash
-            ./scripts/download-armbian-image.sh --latest
-            ```
-          files: |
-            armbian-build/output/images/*.img.xz
-            armbian-build/output/images/*.img.sha
-            armbian-build/output/images/*.img.txt
+          # List uploaded files
+          echo "Uploaded files:"
+          rclone ls "gdrive:${GDRIVE_PATH}/"
 
       - name: Update images.json
         run: |
           VERSION="${{ needs.check-version.outputs.upstream_version }}"
           DATE=$(date -u +%Y-%m-%d)
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/armbian-${VERSION}"
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/armbian-${VERSION}/${{ steps.metadata.outputs.filename }}"
-          CHECKSUM_URL="https://github.com/${{ github.repository }}/releases/download/armbian-${VERSION}/${{ steps.metadata.outputs.filename }}.sha256"
+          DOWNLOAD_URL="${{ steps.upload.outputs.download_url }}"
+          GDRIVE_FOLDER="https://drive.google.com/drive/folders/${{ secrets.GDRIVE_FOLDER_ID }}"
 
           # Initialize images.json if it doesn't exist
           if [ ! -f images.json ]; then
@@ -215,8 +218,7 @@ jobs:
              --arg size "${{ steps.metadata.outputs.size }}" \
              --arg sha256 "${{ steps.metadata.outputs.sha256 }}" \
              --arg download_url "$DOWNLOAD_URL" \
-             --arg checksum_url "$CHECKSUM_URL" \
-             --arg release_url "$RELEASE_URL" \
+             --arg gdrive_folder "$GDRIVE_FOLDER" \
           '.latest = {
             armbian_version: $version,
             kernel_version: $kernel,
@@ -227,12 +229,11 @@ jobs:
             size_bytes: ($size | tonumber),
             sha256: $sha256,
             download_url: $download_url,
-            checksum_url: $checksum_url,
-            release_url: $release_url
+            gdrive_folder: $gdrive_folder
           } | .history = ([{
             armbian_version: $version,
             build_date: $date,
-            release_url: $release_url
+            download_url: $download_url
           }] + .history[0:9])' images.json > images.json.tmp && mv images.json.tmp images.json
 
           echo "Updated images.json:"
