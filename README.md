@@ -26,8 +26,8 @@ Deploy a 4-node K3s cluster on Turing Pi with:
 
 - Terraform >= 1.5
 - Ansible >= 2.15
-- Turing Pi BMC access (10.10.88.70)
-- Armbian image with NPU support from [armbian.com/turing-rk1](https://www.armbian.com/turing-rk1/)
+- Turing Pi BMC access
+- Armbian image (see [Building Armbian](#building-armbian) or download from [armbian.com/turing-rk1](https://www.armbian.com/turing-rk1/))
 
 ## Quick Start
 
@@ -145,6 +145,28 @@ Requires Armbian with Rockchip vendor kernel (6.1.x).
 
 > **Note**: Dev tools (rknn-toolkit2, ezrknpu) are not installed by default.
 > For model conversion, install them manually or use a separate dev machine.
+
+## Building Armbian
+
+Build custom Armbian images with NPU support using the [Armbian build framework](https://github.com/armbian/build):
+
+```bash
+# Clone build framework
+git clone --depth=1 https://github.com/armbian/build ~/armbian-build
+cd ~/armbian-build
+
+# Build image with vendor kernel (required for NPU)
+./compile.sh build \
+  BOARD=turing-rk1 \
+  BRANCH=vendor \
+  RELEASE=bookworm \
+  BUILD_MINIMAL=no \
+  BUILD_DESKTOP=no
+```
+
+Output: `~/armbian-build/output/images/Armbian-*_Turing-rk1_bookworm_vendor_*.img`
+
+For advanced options (custom packages, static IPs, SSH keys), see **[docs/ARMBIAN-BUILD.md](docs/ARMBIAN-BUILD.md)**.
 
 ## Development
 
