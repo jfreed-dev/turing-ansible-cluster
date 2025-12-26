@@ -295,6 +295,6 @@ node1:
 | Node | Boot Device | Longhorn Storage | Migration Date |
 |------|-------------|------------------|----------------|
 | node1 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
-| node2 | eMMC (29G) | NVMe (465G) | - |
+| node2 | NVMe (50G) | NVMe (415G) | 2025-12-26 |
 | node3 | eMMC (29G) | NVMe (465G) | - |
 | node4 | eMMC (29G) | NVMe (465G) | - |
