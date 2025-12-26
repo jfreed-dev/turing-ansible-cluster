@@ -9,6 +9,47 @@ This guide covers building a custom Armbian image for Turing RK1 compute modules
 - **Reproducibility**: Consistent builds for all cluster nodes
 - **Latest Updates**: Get newer packages than pre-built images
 
+## Latest Pre-built Image
+
+Pre-built images are automatically generated when new Armbian versions are released.
+
+| Property | Value |
+|----------|-------|
+| Version | 26.02.0-trunk |
+| Kernel | 6.1.115 (vendor branch, NPU support) |
+| Release | Bookworm (Debian 12) |
+| Size | ~491 MB (compressed) |
+
+### Quick Download
+
+```bash
+# Using the download script
+./scripts/download-armbian-image.sh --latest
+
+# Or download directly
+wget $(jq -r '.latest.download_url' images.json)
+```
+
+### Verify & Flash
+
+```bash
+# Verify checksum
+echo "$(jq -r '.latest.sha256' images.json)  $(jq -r '.latest.filename' images.json)" | sha256sum -c
+
+# Decompress
+xz -d Armbian-*.img.xz
+
+# Prepare for specific node (injects SSH key, static IP)
+./scripts/prepare-armbian-image.sh Armbian-*.img 1
+
+# Flash to node
+tpi flash --node 1 --image-path Armbian-*.img
+```
+
+See [images.json](../images.json) for full metadata including download URLs and checksums.
+
+> **Note**: The automated build workflow checks daily for new Armbian versions and publishes updated images to [GitHub Releases](https://github.com/jfreed-dev/turing-ansible-cluster/releases).
+
 ## Prerequisites
 
 ### System Requirements

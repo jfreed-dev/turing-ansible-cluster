@@ -1,0 +1,29 @@
+{
+  "latest": {
+    "armbian_version": "26.02.0-trunk",
+    "kernel_version": "6.1.115",
+    "release": "bookworm",
+    "branch": "vendor",
+    "build_date": "2025-12-24",
+    "filename": "Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz",
+    "size_bytes": 514725992,
+    "sha256": "a4f42c5c88bea566e2663e039cec43b4e1a46c5112118f5bcee746c1f16a58c1",
+    "download_url": "https://drive.google.com/open?id=16wa6dNsBJSYoPg9lZnpThxMcdxHxbwf9",
+    "checksum_url": null,
+    "release_url": null
+  },
+  "history": [
+    {
+      "armbian_version": "26.02.0-trunk",
+      "build_date": "2025-12-24",
+      "release_url": null
+    }
+  ],
+  "build_config": {
+    "board": "turing-rk1",
+    "branch": "vendor",
+    "release": "bookworm",
+    "build_minimal": false,
+    "build_desktop": false
+  }
+}

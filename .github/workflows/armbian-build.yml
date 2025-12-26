@@ -1,0 +1,223 @@
+name: Build Armbian Image
+
+on:
+  schedule:
+    # Run daily at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build regardless of version change'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    name: Check Upstream Version
+    runs-on: ubuntu-latest
+    outputs:
+      build_needed: ${{ steps.check.outputs.build_needed }}
+      upstream_version: ${{ steps.check.outputs.upstream_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check upstream VERSION
+        id: check
+        run: |
+          # Fetch current upstream VERSION from armbian/build
+          UPSTREAM_VERSION=$(curl -sL https://raw.githubusercontent.com/armbian/build/main/VERSION | tr -d '\n\r')
+          echo "upstream_version=$UPSTREAM_VERSION" >> $GITHUB_OUTPUT
+          echo "Upstream Armbian version: $UPSTREAM_VERSION"
+
+          # Get last built version from images.json
+          LAST_BUILT=""
+          if [ -f images.json ]; then
+            LAST_BUILT=$(jq -r '.latest.armbian_version // ""' images.json)
+          fi
+          echo "Last built version: $LAST_BUILT"
+
+          # Determine if build is needed
+          if [ "$UPSTREAM_VERSION" != "$LAST_BUILT" ] || [ "${{ inputs.force_build }}" == "true" ]; then
+            echo "build_needed=true" >> $GITHUB_OUTPUT
+            echo "Build needed: version changed or force build requested"
+          else
+            echo "build_needed=false" >> $GITHUB_OUTPUT
+            echo "Build not needed: version unchanged"
+          fi
+
+  build:
+    name: Build Armbian
+    needs: check-version
+    if: needs.check-version.outputs.build_needed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 4096
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Clone Armbian build framework
+        run: |
+          git clone --depth=1 https://github.com/armbian/build armbian-build
+
+      - name: Build Armbian image
+        run: |
+          cd armbian-build
+          ./compile.sh build \
+            BOARD=turing-rk1 \
+            BRANCH=vendor \
+            RELEASE=bookworm \
+            BUILD_MINIMAL=no \
+            BUILD_DESKTOP=no \
+            KERNEL_CONFIGURE=no \
+            COMPRESS_OUTPUTIMAGE=xz,sha
+
+      - name: Extract image metadata
+        id: metadata
+        run: |
+          # Find the built image
+          IMAGE_FILE=$(ls armbian-build/output/images/*.img.xz 2>/dev/null | head -1)
+          if [ -z "$IMAGE_FILE" ]; then
+            echo "Error: No image file found"
+            exit 1
+          fi
+
+          FILENAME=$(basename "$IMAGE_FILE")
+          SIZE=$(stat -c%s "$IMAGE_FILE")
+          SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B "$SIZE")
+          SHA256=$(sha256sum "$IMAGE_FILE" | cut -d' ' -f1)
+
+          # Extract kernel version from filename
+          KERNEL=$(echo "$FILENAME" | grep -oP '\d+\.\d+\.\d+' | tail -1)
+
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          echo "size_human=$SIZE_HUMAN" >> $GITHUB_OUTPUT
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "kernel=$KERNEL" >> $GITHUB_OUTPUT
+
+          echo "Image: $FILENAME"
+          echo "Size: $SIZE_HUMAN"
+          echo "SHA256: $SHA256"
+          echo "Kernel: $KERNEL"
+
+      - name: Create GitHub Release
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: armbian-${{ needs.check-version.outputs.upstream_version }}
+          name: Armbian ${{ needs.check-version.outputs.upstream_version }} for Turing RK1
+          body: |
+            ## Armbian Image for Turing RK1
+
+            | Property | Value |
+            |----------|-------|
+            | Version | ${{ needs.check-version.outputs.upstream_version }} |
+            | Kernel | ${{ steps.metadata.outputs.kernel }} (vendor branch) |
+            | Release | Bookworm (Debian 12) |
+            | Size | ${{ steps.metadata.outputs.size_human }} |
+            | SHA256 | `${{ steps.metadata.outputs.sha256 }}` |
+
+            ### Features
+            - Rockchip vendor kernel with NPU support
+            - Pre-configured for Turing Pi cluster deployment
+
+            ### Download & Flash
+
+            ```bash
+            # Download
+            wget https://github.com/${{ github.repository }}/releases/download/armbian-${{ needs.check-version.outputs.upstream_version }}/${{ steps.metadata.outputs.filename }}
+
+            # Verify checksum
+            echo "${{ steps.metadata.outputs.sha256 }}  ${{ steps.metadata.outputs.filename }}" | sha256sum -c
+
+            # Decompress
+            xz -d ${{ steps.metadata.outputs.filename }}
+
+            # Prepare for node (optional - injects SSH keys, static IP)
+            ./scripts/prepare-armbian-image.sh ${IMAGE%.xz} 1
+
+            # Flash to node
+            tpi flash --node 1 --image-path ${IMAGE%.xz}
+            ```
+
+            ### Using the download script
+
+            ```bash
+            ./scripts/download-armbian-image.sh --latest
+            ```
+          files: |
+            armbian-build/output/images/*.img.xz
+            armbian-build/output/images/*.img.sha
+            armbian-build/output/images/*.img.txt
+
+      - name: Update images.json
+        run: |
+          VERSION="${{ needs.check-version.outputs.upstream_version }}"
+          DATE=$(date -u +%Y-%m-%d)
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/armbian-${VERSION}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/armbian-${VERSION}/${{ steps.metadata.outputs.filename }}"
+          CHECKSUM_URL="https://github.com/${{ github.repository }}/releases/download/armbian-${VERSION}/${{ steps.metadata.outputs.filename }}.sha256"
+
+          # Initialize images.json if it doesn't exist
+          if [ ! -f images.json ]; then
+            echo '{"history":[],"build_config":{"board":"turing-rk1","branch":"vendor","release":"bookworm"}}' > images.json
+          fi
+
+          # Update images.json with new metadata
+          jq --arg version "$VERSION" \
+             --arg kernel "${{ steps.metadata.outputs.kernel }}" \
+             --arg date "$DATE" \
+             --arg filename "${{ steps.metadata.outputs.filename }}" \
+             --arg size "${{ steps.metadata.outputs.size }}" \
+             --arg sha256 "${{ steps.metadata.outputs.sha256 }}" \
+             --arg download_url "$DOWNLOAD_URL" \
+             --arg checksum_url "$CHECKSUM_URL" \
+             --arg release_url "$RELEASE_URL" \
+          '.latest = {
+            armbian_version: $version,
+            kernel_version: $kernel,
+            release: "bookworm",
+            branch: "vendor",
+            build_date: $date,
+            filename: $filename,
+            size_bytes: ($size | tonumber),
+            sha256: $sha256,
+            download_url: $download_url,
+            checksum_url: $checksum_url,
+            release_url: $release_url
+          } | .history = ([{
+            armbian_version: $version,
+            build_date: $date,
+            release_url: $release_url
+          }] + .history[0:9])' images.json > images.json.tmp && mv images.json.tmp images.json
+
+          echo "Updated images.json:"
+          cat images.json
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add images.json
+          git diff --cached --quiet || git commit -m "Update Armbian image metadata for version ${{ needs.check-version.outputs.upstream_version }}"
+          git push

@@ -1,7 +1,8 @@
 #!/bin/bash
-# Download Armbian images from Google Drive
+# Download Armbian images from Google Drive or GitHub Releases
 #
 # Usage: ./scripts/download-armbian-image.sh <url-or-file-id> [output-filename]
+#        ./scripts/download-armbian-image.sh --latest
 #
 # Supports multiple download methods:
 #   - gdown (recommended for large files)
@@ -12,6 +13,7 @@
 #   - Automatic checksum verification
 #   - Handles Google Drive virus scan warnings
 #   - Supports share links and direct file IDs
+#   - --latest flag to download from images.json metadata
 
 set -e
 
@@ -19,6 +21,8 @@ set -e
 VERIFY_CHECKSUM="${VERIFY_CHECKSUM:-true}"
 DECOMPRESS="${DECOMPRESS:-false}"
 DOWNLOAD_DIR="${DOWNLOAD_DIR:-.}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Colors for output
 RED='\033[0;31m'
@@ -45,12 +49,13 @@ log_step() {
 
 usage() {
     cat << 'EOF'
-Usage: download-armbian-image.sh <url-or-file-id> [output-filename]
+Usage: download-armbian-image.sh [--latest | <url-or-file-id>] [output-filename]
 
-Download Armbian images from Google Drive with checksum verification.
+Download Armbian images from Google Drive or GitHub Releases.
 
 Arguments:
-  url-or-file-id    Google Drive share URL or file ID
+  --latest          Download the latest image from images.json metadata
+  url-or-file-id    Google Drive share URL, GitHub Release URL, or file ID
   output-filename   Optional: output filename (auto-detected if omitted)
 
 Environment variables:
@@ -61,10 +66,13 @@ Environment variables:
 Supported URL formats:
   https://drive.google.com/file/d/FILE_ID/view?usp=sharing
   https://drive.google.com/open?id=FILE_ID
-  https://drive.google.com/uc?id=FILE_ID
+  https://github.com/.../releases/download/.../filename.img.xz
   FILE_ID (just the ID string)
 
 Examples:
+  # Download latest image (reads from images.json)
+  ./download-armbian-image.sh --latest
+
   # Download using share link
   ./download-armbian-image.sh 'https://drive.google.com/file/d/1abc.../view?usp=sharing'
 
@@ -72,10 +80,10 @@ Examples:
   ./download-armbian-image.sh 1abcDEF123xyz
 
   # Download and decompress
-  DECOMPRESS=true ./download-armbian-image.sh 1abcDEF123xyz
+  DECOMPRESS=true ./download-armbian-image.sh --latest
 
   # Download to specific directory
-  DOWNLOAD_DIR=/tmp ./download-armbian-image.sh 1abcDEF123xyz
+  DOWNLOAD_DIR=/tmp ./download-armbian-image.sh --latest
 
 Download methods (in order of preference):
   1. gdown  - Best for large files, handles virus scan warnings
@@ -259,6 +267,58 @@ decompress_file() {
     esac
 }
 
+# Download from direct URL (GitHub Releases, etc.)
+download_direct_url() {
+    local url="$1"
+    local output="$2"
+
+    log_step "Downloading from direct URL..."
+
+    if [[ -n "$output" ]]; then
+        curl -L -o "$output" "$url" --progress-bar
+    else
+        curl -L -O -J "$url" --progress-bar
+    fi
+}
+
+# Fetch latest image info from images.json
+get_latest_image() {
+    local images_json="${REPO_ROOT}/images.json"
+
+    if [[ ! -f "$images_json" ]]; then
+        log_error "images.json not found at: $images_json"
+        echo "Run this script from the repository root or ensure images.json exists."
+        exit 1
+    fi
+
+    if ! command -v jq &> /dev/null; then
+        log_error "jq is required for --latest. Install with: sudo apt install jq"
+        exit 1
+    fi
+
+    local download_url=$(jq -r '.latest.download_url // ""' "$images_json")
+    local filename=$(jq -r '.latest.filename // ""' "$images_json")
+    local sha256=$(jq -r '.latest.sha256 // ""' "$images_json")
+    local version=$(jq -r '.latest.armbian_version // ""' "$images_json")
+
+    if [[ -z "$download_url" ]] || [[ "$download_url" == "null" ]]; then
+        log_error "No download URL found in images.json"
+        exit 1
+    fi
+
+    echo ""
+    echo "=== Latest Armbian Image ==="
+    echo "Version: $version"
+    echo "Filename: $filename"
+    echo "SHA256: $sha256"
+    echo ""
+
+    # Export for use in main script
+    LATEST_URL="$download_url"
+    LATEST_FILENAME="$filename"
+    LATEST_SHA256="$sha256"
+}
+
 # Main script
 if [[ $# -lt 1 ]]; then
     usage
@@ -266,6 +326,65 @@ fi
 
 INPUT="$1"
 OUTPUT_FILE="${2:-}"
+
+# Handle --latest flag
+if [[ "$INPUT" == "--latest" ]]; then
+    get_latest_image
+
+    # Change to download directory
+    if [[ "$DOWNLOAD_DIR" != "." ]]; then
+        mkdir -p "$DOWNLOAD_DIR"
+        cd "$DOWNLOAD_DIR"
+        log_info "Download directory: $DOWNLOAD_DIR"
+    fi
+
+    echo "=== Downloading Armbian Image ==="
+    echo ""
+
+    # Determine download method based on URL
+    if [[ "$LATEST_URL" == *"github.com"* ]]; then
+        download_direct_url "$LATEST_URL" "$LATEST_FILENAME"
+    elif [[ "$LATEST_URL" == *"drive.google.com"* ]]; then
+        FILE_ID=$(extract_file_id "$LATEST_URL")
+        METHOD=$(detect_download_method)
+        case "$METHOD" in
+            gdown) download_with_gdown "$FILE_ID" "$LATEST_FILENAME" ;;
+            rclone) download_with_rclone "$FILE_ID" "$LATEST_FILENAME" ;;
+            curl) download_with_curl "$FILE_ID" "$LATEST_FILENAME" ;;
+            wget) download_with_wget "$FILE_ID" "$LATEST_FILENAME" ;;
+        esac
+    else
+        download_direct_url "$LATEST_URL" "$LATEST_FILENAME"
+    fi
+
+    DOWNLOADED_FILE="$LATEST_FILENAME"
+
+    echo ""
+    echo "=== Download Complete ==="
+    echo "File: $DOWNLOADED_FILE"
+    echo "Size: $(du -h "$DOWNLOADED_FILE" | cut -f1)"
+
+    # Verify checksum
+    if [[ "$VERIFY_CHECKSUM" == "true" ]] && [[ -n "$LATEST_SHA256" ]]; then
+        log_step "Verifying SHA256 checksum..."
+        echo "$LATEST_SHA256  $DOWNLOADED_FILE" | sha256sum -c
+    fi
+
+    # Decompress if requested
+    if [[ "$DECOMPRESS" == "true" ]]; then
+        decompress_file "$DOWNLOADED_FILE"
+    fi
+
+    echo ""
+    echo "=== Next Steps ==="
+    echo "1. Prepare the image:"
+    echo "   ./scripts/prepare-armbian-image.sh ${DOWNLOADED_FILE%.xz} 1"
+    echo ""
+    echo "2. Flash to node:"
+    echo "   tpi flash --node 1 --image-path ${DOWNLOADED_FILE%.xz}"
+
+    exit 0
+fi
 
 # Extract file ID
 FILE_ID=$(extract_file_id "$INPUT")
