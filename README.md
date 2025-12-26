@@ -170,20 +170,20 @@ For advanced options (custom packages, static IPs, SSH keys), see **[docs/ARMBIA
 
 ### Image Distribution
 
-Share images via Google Drive using the included scripts:
+Pre-built images are hosted on Cloudflare R2 at [armbian-builds.techki.to](https://armbian-builds.techki.to):
 
 ```bash
-# Upload (requires rclone configured with 'gdrive' remote)
-./scripts/upload-armbian-image.sh Armbian_24.11_Turing-rk1.img.xz stable
-
-# Download (requires gdown: pip install gdown)
-./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/...'
+# Download latest image
+./scripts/download-armbian-image.sh --latest
 
 # Prepare for specific node
-./scripts/prepare-armbian-image.sh Armbian_24.11_Turing-rk1.img 1
+./scripts/prepare-armbian-image.sh Armbian-*.img 1
+
+# Flash to node
+tpi flash --node 1 --image-path Armbian-*.img
 ```
 
-See **[docs/ARMBIAN-BUILD.md#image-distribution](docs/ARMBIAN-BUILD.md#image-distribution)** for setup and full usage.
+See **[docs/ARMBIAN-BUILD.md#image-distribution](docs/ARMBIAN-BUILD.md#image-distribution)** for full usage.
 
 ## Development
 

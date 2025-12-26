@@ -1,19 +1,13 @@
 #!/bin/bash
-# Download Armbian images from Google Drive or GitHub Releases
+# Download Armbian images from Cloudflare R2
 #
-# Usage: ./scripts/download-armbian-image.sh <url-or-file-id> [output-filename]
-#        ./scripts/download-armbian-image.sh --latest
-#
-# Supports multiple download methods:
-#   - gdown (recommended for large files)
-#   - rclone (if configured)
-#   - wget/curl (fallback)
+# Usage: ./scripts/download-armbian-image.sh --latest
+#        ./scripts/download-armbian-image.sh <url> [output-filename]
 #
 # Features:
 #   - Automatic checksum verification
-#   - Handles Google Drive virus scan warnings
-#   - Supports share links and direct file IDs
 #   - --latest flag to download from images.json metadata
+#   - Optional auto-decompression
 
 set -e
 
@@ -49,13 +43,13 @@ log_step() {
 
 usage() {
     cat << 'EOF'
-Usage: download-armbian-image.sh [--latest | <url-or-file-id>] [output-filename]
+Usage: download-armbian-image.sh [--latest | <url>] [output-filename]
 
-Download Armbian images from Google Drive or GitHub Releases.
+Download Armbian images from Cloudflare R2.
 
 Arguments:
   --latest          Download the latest image from images.json metadata
-  url-or-file-id    Google Drive share URL, GitHub Release URL, or file ID
+  url               Direct download URL
   output-filename   Optional: output filename (auto-detected if omitted)
 
 Environment variables:
@@ -63,21 +57,9 @@ Environment variables:
   DECOMPRESS        Decompress .xz/.gz files after download (default: false)
   DOWNLOAD_DIR      Directory to save files (default: current directory)
 
-Supported URL formats:
-  https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-  https://drive.google.com/open?id=FILE_ID
-  https://github.com/.../releases/download/.../filename.img.xz
-  FILE_ID (just the ID string)
-
 Examples:
   # Download latest image (reads from images.json)
   ./download-armbian-image.sh --latest
-
-  # Download using share link
-  ./download-armbian-image.sh 'https://drive.google.com/file/d/1abc.../view?usp=sharing'
-
-  # Download using file ID
-  ./download-armbian-image.sh 1abcDEF123xyz
 
   # Download and decompress
   DECOMPRESS=true ./download-armbian-image.sh --latest
@@ -85,160 +67,11 @@ Examples:
   # Download to specific directory
   DOWNLOAD_DIR=/tmp ./download-armbian-image.sh --latest
 
-Download methods (in order of preference):
-  1. gdown  - Best for large files, handles virus scan warnings
-  2. rclone - If you have Google Drive configured
-  3. curl   - Fallback, may fail for files >100MB
-
-Install gdown (recommended):
-  pip install gdown
+  # Download from direct URL
+  ./download-armbian-image.sh https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian.img.xz
 
 EOF
     exit 1
-}
-
-# Extract file ID from various Google Drive URL formats
-extract_file_id() {
-    local input="$1"
-    local file_id=""
-
-    # Already a file ID (no slashes or special chars)
-    if [[ "$input" =~ ^[a-zA-Z0-9_-]+$ ]] && [[ ${#input} -gt 20 ]]; then
-        echo "$input"
-        return
-    fi
-
-    # Format: /file/d/FILE_ID/
-    if [[ "$input" =~ /file/d/([a-zA-Z0-9_-]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
-        return
-    fi
-
-    # Format: ?id=FILE_ID or &id=FILE_ID
-    if [[ "$input" =~ [?\&]id=([a-zA-Z0-9_-]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
-        return
-    fi
-
-    # Format: /folders/FOLDER_ID
-    if [[ "$input" =~ /folders/([a-zA-Z0-9_-]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
-        return
-    fi
-
-    # Could not extract
-    echo ""
-}
-
-# Check which download tools are available
-detect_download_method() {
-    if command -v gdown &> /dev/null; then
-        echo "gdown"
-    elif command -v rclone &> /dev/null && rclone listremotes 2>/dev/null | grep -q ":"; then
-        echo "rclone"
-    elif command -v curl &> /dev/null; then
-        echo "curl"
-    elif command -v wget &> /dev/null; then
-        echo "wget"
-    else
-        echo "none"
-    fi
-}
-
-# Download using gdown (recommended)
-download_with_gdown() {
-    local file_id="$1"
-    local output="$2"
-
-    log_step "Downloading with gdown..."
-
-    local args=("--fuzzy" "$file_id")
-
-    if [[ -n "$output" ]]; then
-        args+=("-O" "$output")
-    fi
-
-    gdown "${args[@]}"
-}
-
-# Download using rclone backend
-download_with_rclone() {
-    local file_id="$1"
-    local output="$2"
-    local remote
-
-    # Find first available Google Drive remote
-    remote=$(rclone listremotes | grep -E "^[^:]+:$" | head -1 | tr -d ':')
-
-    if [[ -z "$remote" ]]; then
-        log_error "No rclone remote found"
-        return 1
-    fi
-
-    log_step "Downloading with rclone (remote: $remote)..."
-
-    if [[ -n "$output" ]]; then
-        rclone backend copyid "$remote": "$file_id" "$output" --progress
-    else
-        rclone backend copyid "$remote": "$file_id" . --progress
-    fi
-}
-
-# Download using curl (fallback, limited to ~100MB)
-download_with_curl() {
-    local file_id="$1"
-    local output="$2"
-
-    log_step "Downloading with curl..."
-    log_warn "curl may fail for files >100MB due to virus scan"
-
-    local url="https://drive.usercontent.google.com/download?export=download&id=${file_id}&confirm=t"
-
-    if [[ -n "$output" ]]; then
-        curl -L -o "$output" "$url" --progress-bar
-    else
-        # Try to get filename from headers
-        curl -L -O -J "$url" --progress-bar
-    fi
-}
-
-# Download using wget (fallback)
-download_with_wget() {
-    local file_id="$1"
-    local output="$2"
-
-    log_step "Downloading with wget..."
-    log_warn "wget may fail for files >100MB due to virus scan"
-
-    local url="https://drive.usercontent.google.com/download?export=download&id=${file_id}&confirm=t"
-
-    if [[ -n "$output" ]]; then
-        wget -O "$output" "$url" --show-progress
-    else
-        wget --content-disposition "$url" --show-progress
-    fi
-}
-
-# Verify SHA256 checksum
-verify_checksum() {
-    local file="$1"
-    local checksum_file="${file}.sha256"
-
-    # Try to download checksum file if it exists
-    if [[ ! -f "$checksum_file" ]]; then
-        log_info "Checksum file not found locally, skipping verification"
-        return 0
-    fi
-
-    log_step "Verifying SHA256 checksum..."
-
-    if sha256sum -c "$checksum_file"; then
-        log_info "Checksum verified successfully!"
-        return 0
-    else
-        log_error "Checksum verification FAILED!"
-        return 1
-    fi
 }
 
 # Decompress file
@@ -267,12 +100,12 @@ decompress_file() {
     esac
 }
 
-# Download from direct URL (GitHub Releases, etc.)
-download_direct_url() {
+# Download from URL
+download_url() {
     local url="$1"
     local output="$2"
 
-    log_step "Downloading from direct URL..."
+    log_step "Downloading from URL..."
 
     if [[ -n "$output" ]]; then
         curl -L -o "$output" "$url" --progress-bar
@@ -341,21 +174,7 @@ if [[ "$INPUT" == "--latest" ]]; then
     echo "=== Downloading Armbian Image ==="
     echo ""
 
-    # Determine download method based on URL
-    if [[ "$LATEST_URL" == *"github.com"* ]]; then
-        download_direct_url "$LATEST_URL" "$LATEST_FILENAME"
-    elif [[ "$LATEST_URL" == *"drive.google.com"* ]]; then
-        FILE_ID=$(extract_file_id "$LATEST_URL")
-        METHOD=$(detect_download_method)
-        case "$METHOD" in
-            gdown) download_with_gdown "$FILE_ID" "$LATEST_FILENAME" ;;
-            rclone) download_with_rclone "$FILE_ID" "$LATEST_FILENAME" ;;
-            curl) download_with_curl "$FILE_ID" "$LATEST_FILENAME" ;;
-            wget) download_with_wget "$FILE_ID" "$LATEST_FILENAME" ;;
-        esac
-    else
-        download_direct_url "$LATEST_URL" "$LATEST_FILENAME"
-    fi
+    download_url "$LATEST_URL" "$LATEST_FILENAME"
 
     DOWNLOADED_FILE="$LATEST_FILENAME"
 
@@ -377,101 +196,67 @@ if [[ "$INPUT" == "--latest" ]]; then
 
     echo ""
     echo "=== Next Steps ==="
-    echo "1. Prepare the image:"
+    echo "1. Decompress (if needed):"
+    echo "   xz -d ${DOWNLOADED_FILE}"
+    echo ""
+    echo "2. Prepare the image:"
     echo "   ./scripts/prepare-armbian-image.sh ${DOWNLOADED_FILE%.xz} 1"
     echo ""
-    echo "2. Flash to node:"
+    echo "3. Flash to node:"
     echo "   tpi flash --node 1 --image-path ${DOWNLOADED_FILE%.xz}"
 
     exit 0
 fi
 
-# Extract file ID
-FILE_ID=$(extract_file_id "$INPUT")
+# Direct URL download
+if [[ "$INPUT" == http* ]]; then
+    # Change to download directory
+    if [[ "$DOWNLOAD_DIR" != "." ]]; then
+        mkdir -p "$DOWNLOAD_DIR"
+        cd "$DOWNLOAD_DIR"
+        log_info "Download directory: $DOWNLOAD_DIR"
+    fi
 
-if [[ -z "$FILE_ID" ]]; then
-    log_error "Could not extract file ID from: $INPUT"
+    echo "=== Downloading Armbian Image ==="
     echo ""
-    echo "Expected formats:"
-    echo "  https://drive.google.com/file/d/FILE_ID/view?usp=sharing"
-    echo "  https://drive.google.com/open?id=FILE_ID"
-    echo "  FILE_ID (just the ID)"
-    exit 1
-fi
 
-log_info "File ID: $FILE_ID"
+    download_url "$INPUT" "$OUTPUT_FILE"
 
-# Change to download directory
-if [[ "$DOWNLOAD_DIR" != "." ]]; then
-    mkdir -p "$DOWNLOAD_DIR"
-    cd "$DOWNLOAD_DIR"
-    log_info "Download directory: $DOWNLOAD_DIR"
-fi
+    # Find the downloaded file
+    if [[ -n "$OUTPUT_FILE" ]]; then
+        DOWNLOADED_FILE="$OUTPUT_FILE"
+    else
+        # Find most recently modified file
+        DOWNLOADED_FILE=$(ls -t *.img* 2>/dev/null | head -1 || true)
+    fi
 
-# Detect best download method
-METHOD=$(detect_download_method)
-log_info "Download method: $METHOD"
-
-echo ""
-echo "=== Downloading Armbian Image ==="
-echo ""
-
-# Download the file
-case "$METHOD" in
-    gdown)
-        download_with_gdown "$FILE_ID" "$OUTPUT_FILE"
-        ;;
-    rclone)
-        download_with_rclone "$FILE_ID" "$OUTPUT_FILE"
-        ;;
-    curl)
-        download_with_curl "$FILE_ID" "$OUTPUT_FILE"
-        ;;
-    wget)
-        download_with_wget "$FILE_ID" "$OUTPUT_FILE"
-        ;;
-    none)
-        log_error "No download tool available!"
+    if [[ -z "$DOWNLOADED_FILE" ]] || [[ ! -f "$DOWNLOADED_FILE" ]]; then
+        log_warn "Could not locate downloaded file"
+    else
         echo ""
-        echo "Install one of the following:"
-        echo "  pip install gdown     (recommended)"
-        echo "  sudo apt install rclone"
-        echo "  sudo apt install curl"
-        exit 1
-        ;;
-esac
+        echo "=== Download Complete ==="
+        echo "File: $DOWNLOADED_FILE"
+        echo "Size: $(du -h "$DOWNLOADED_FILE" | cut -f1)"
 
-# Find the downloaded file
-if [[ -n "$OUTPUT_FILE" ]]; then
-    DOWNLOADED_FILE="$OUTPUT_FILE"
-else
-    # Find most recently modified file
-    DOWNLOADED_FILE=$(ls -t *.img* 2>/dev/null | head -1 || true)
-fi
+        # Decompress if requested
+        if [[ "$DECOMPRESS" == "true" ]]; then
+            decompress_file "$DOWNLOADED_FILE"
+        fi
 
-if [[ -z "$DOWNLOADED_FILE" ]] || [[ ! -f "$DOWNLOADED_FILE" ]]; then
-    log_warn "Could not locate downloaded file"
-else
-    echo ""
-    echo "=== Download Complete ==="
-    echo "File: $DOWNLOADED_FILE"
-    echo "Size: $(du -h "$DOWNLOADED_FILE" | cut -f1)"
-
-    # Verify checksum if requested
-    if [[ "$VERIFY_CHECKSUM" == "true" ]]; then
-        verify_checksum "$DOWNLOADED_FILE" || true
+        echo ""
+        echo "=== Next Steps ==="
+        echo "1. Prepare the image:"
+        echo "   ./scripts/prepare-armbian-image.sh $DOWNLOADED_FILE 1"
+        echo ""
+        echo "2. Flash to node:"
+        echo "   tpi flash --node 1 --image-path ${DOWNLOADED_FILE%.xz}"
     fi
 
-    # Decompress if requested
-    if [[ "$DECOMPRESS" == "true" ]]; then
-        decompress_file "$DOWNLOADED_FILE"
-    fi
-
-    echo ""
-    echo "=== Next Steps ==="
-    echo "1. Prepare the image:"
-    echo "   ./scripts/prepare-armbian-image.sh $DOWNLOADED_FILE 1"
-    echo ""
-    echo "2. Flash to node:"
-    echo "   tpi flash --node 1 --image-path ${DOWNLOADED_FILE%.xz}"
+    exit 0
 fi
+
+# Unknown input
+log_error "Unknown input: $INPUT"
+echo ""
+echo "Use --latest to download the latest image, or provide a direct URL."
+usage

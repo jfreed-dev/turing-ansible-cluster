@@ -50,49 +50,43 @@ See [Image Preparation](#image-preparation) for full details on the prepare scri
 
 See [images.json](../images.json) for full metadata including download URLs and checksums.
 
-> **Note**: The automated build workflow checks daily for new Armbian versions and uploads images to Google Drive.
+> **Note**: The automated build workflow checks daily for new Armbian versions and uploads images to Cloudflare R2 at [armbian-builds.techki.to](https://armbian-builds.techki.to).
 
 ## Automated Build Setup (Maintainers)
 
-The GitHub Actions workflow automatically builds and uploads images to Google Drive when new Armbian versions are released.
+The GitHub Actions workflow automatically builds and uploads images to Cloudflare R2 when new Armbian versions are released.
 
 ### Required GitHub Secrets
 
 | Secret | Description |
 |--------|-------------|
-| `GDRIVE_SERVICE_ACCOUNT` | Google Cloud service account JSON key |
-| `GDRIVE_FOLDER_ID` | Google Drive folder ID for uploads |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key ID |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret access key |
+| `R2_ENDPOINT` | R2 S3-compatible endpoint URL |
+| `R2_PUBLIC_URL` | Public URL for downloads (e.g., `https://armbian-builds.techki.to`) |
+| `PAT_TOKEN` | GitHub Personal Access Token for pushing to protected branch |
 
 ### Setup Steps
 
-1. **Create Google Cloud Service Account**:
-   ```bash
-   # Create project (or use existing)
-   gcloud projects create armbian-builds --name="Armbian Builds"
-   gcloud config set project armbian-builds
+1. **Create Cloudflare R2 Bucket**:
+   - Go to Cloudflare Dashboard → R2 Object Storage
+   - Create bucket named `armbian-builds`
+   - Enable public access and configure custom domain (optional)
 
-   # Enable Drive API
-   gcloud services enable drive.googleapis.com
-
-   # Create service account
-   gcloud iam service-accounts create armbian-uploader \
-     --display-name="Armbian Build Uploader"
-
-   # Download JSON key
-   gcloud iam service-accounts keys create service-account.json \
-     --iam-account=armbian-uploader@armbian-builds.iam.gserviceaccount.com
-   ```
-
-2. **Share Google Drive folder with service account**:
-   - Create a folder in Google Drive for builds
-   - Right-click → Share → Add the service account email (e.g., `armbian-uploader@armbian-builds.iam.gserviceaccount.com`)
-   - Give "Editor" permissions
-   - Copy the folder ID from the URL: `https://drive.google.com/drive/folders/FOLDER_ID_HERE`
+2. **Create R2 API Token**:
+   - R2 → Manage R2 API Tokens → Create API Token
+   - Permissions: Admin Read & Write
+   - Scope: `armbian-builds` bucket
+   - Copy Access Key ID and Secret Access Key
 
 3. **Add secrets to GitHub repository**:
-   - Go to repository Settings → Secrets and variables → Actions
-   - Add `GDRIVE_SERVICE_ACCOUNT`: paste entire contents of `service-account.json`
-   - Add `GDRIVE_FOLDER_ID`: paste the folder ID from step 2
+   ```bash
+   gh secret set R2_ACCESS_KEY_ID
+   gh secret set R2_SECRET_ACCESS_KEY
+   gh secret set R2_ENDPOINT      # e.g., https://<account-id>.r2.cloudflarestorage.com
+   gh secret set R2_PUBLIC_URL    # e.g., https://armbian-builds.techki.to
+   gh secret set PAT_TOKEN        # GitHub PAT with repo write access
+   ```
 
 4. **Trigger a build**:
    ```bash
@@ -521,108 +515,51 @@ systemctl status iscsid
 
 ## Image Distribution
 
-Share Armbian builds with team members or across machines using Google Drive.
+Pre-built Armbian images are hosted on Cloudflare R2 at [armbian-builds.techki.to](https://armbian-builds.techki.to).
 
-### Prerequisites
-
-```bash
-# Install rclone (for uploading)
-sudo apt install rclone
-rclone config  # Setup 'gdrive' remote
-
-# Install gdown (for downloading)
-pip install gdown
-```
-
-### Upload Images
-
-Upload built images to Google Drive with automatic compression and checksums:
+### Download Latest Image
 
 ```bash
-# Upload to date-based folder
-./scripts/upload-armbian-image.sh output/images/Armbian_24.11_Turing-rk1.img
+# Using the download script (recommended)
+./scripts/download-armbian-image.sh --latest
 
-# Upload to named folder (e.g., stable, nightly)
-./scripts/upload-armbian-image.sh Armbian_24.11_Turing-rk1.img.xz stable
-
-# Custom remote and path
-RCLONE_REMOTE=mydrive GDRIVE_BASE_PATH=firmware/rk1 \
-  ./scripts/upload-armbian-image.sh image.img
-```
-
-**Features:**
-- Auto-compresses uncompressed `.img` files with xz
-- Generates SHA256 checksums
-- Returns shareable download link
-
-**Environment Variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RCLONE_REMOTE` | `gdrive` | rclone remote name |
-| `GDRIVE_BASE_PATH` | `armbian-builds/turing-rk1` | Base folder in Drive |
-| `COMPRESS_LEVEL` | `6` | xz compression level (1-9) |
-
-### Download Images
-
-Download shared images with automatic checksum verification:
-
-```bash
-# Download using share link
-./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/1abc.../view?usp=sharing'
-
-# Download using file ID only
-./scripts/download-armbian-image.sh 1abcDEF123xyz
+# Or download directly
+wget https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz
 
 # Download and auto-decompress
-DECOMPRESS=true ./scripts/download-armbian-image.sh 1abcDEF123xyz
+DECOMPRESS=true ./scripts/download-armbian-image.sh --latest
 
 # Save to specific directory
-DOWNLOAD_DIR=/tmp ./scripts/download-armbian-image.sh 1abcDEF123xyz
+DOWNLOAD_DIR=/tmp ./scripts/download-armbian-image.sh --latest
 ```
 
 **Features:**
-- Auto-selects best download method (gdown → rclone → curl)
-- Verifies SHA256 checksums if available
+- Automatic SHA256 checksum verification
 - Optional auto-decompression
 - Shows next steps for prepare + flash
-
-**Supported URL Formats:**
-
-```
-https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-https://drive.google.com/open?id=FILE_ID
-https://drive.google.com/uc?id=FILE_ID
-FILE_ID  (just the ID string)
-```
 
 ### Complete Workflow
 
 ```bash
-# 1. Build image (or download pre-built)
-cd ~/armbian-build
-./compile.sh build BOARD=turing-rk1 BRANCH=vendor RELEASE=bookworm
+# 1. Download latest pre-built image
+./scripts/download-armbian-image.sh --latest
 
-# 2. Upload to Google Drive (optional, for sharing)
-./scripts/upload-armbian-image.sh output/images/Armbian-*.img stable
-# → Outputs: https://drive.google.com/file/d/1abc.../view
+# 2. Decompress
+xz -d Armbian-*.img.xz
 
-# 3. On target machine: download (if shared)
-./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/1abc...'
-
-# 4. Prepare image for specific node
+# 3. Prepare image for specific node
 #    - Installs packages (open-iscsi, nfs-common, etc.)
 #    - Injects SSH key
 #    - Configures hostname and static IP
 ./scripts/prepare-armbian-image.sh Armbian-*.img 1
 
-# 5. Flash to node
+# 4. Flash to node
 tpi flash --node 1 --image-path Armbian-*.img
 
-# 6. SSH immediately (no password, packages ready)
+# 5. SSH immediately (no password, packages ready)
 ssh root@10.10.88.73
 
-# 7. Run Ansible to complete setup
+# 6. Run Ansible to complete setup
 ansible-playbook -i inventories/server/hosts.yml playbooks/site.yml --limit node1
 ```
 
