@@ -1,0 +1,11 @@
+# Default owner for all files
+* @jfreed-dev
+
+# Ansible playbooks and roles
+/ansible/ @jfreed-dev
+
+# Terraform modules
+/terraform/ @jfreed-dev
+
+# CI/CD workflows
+/.github/ @jfreed-dev
