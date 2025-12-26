@@ -144,66 +144,55 @@ jobs:
           echo "SHA256: $SHA256"
           echo "Kernel: $KERNEL"
 
-      - name: Configure rclone for Google Drive
-        env:
-          GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
+      - name: Configure rclone for Cloudflare R2
         run: |
-          # Create rclone config directory
           mkdir -p ~/.config/rclone
-
-          # Write service account credentials
-          echo "$GDRIVE_SERVICE_ACCOUNT" > /tmp/service-account.json
-
-          # Create rclone config for Google Drive with service account
           cat > ~/.config/rclone/rclone.conf << EOF
-          [gdrive]
-          type = drive
-          scope = drive
-          service_account_file = /tmp/service-account.json
-          root_folder_id = ${{ secrets.GDRIVE_FOLDER_ID }}
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          endpoint = ${{ secrets.R2_ENDPOINT }}
+          acl = private
           EOF
-
-          # Verify config
           rclone listremotes
 
-      - name: Upload to Google Drive
+      - name: Upload to Cloudflare R2
         id: upload
         run: |
           VERSION="${{ needs.check-version.outputs.upstream_version }}"
           FILENAME="${{ steps.metadata.outputs.filename }}"
           IMAGE_FILE="armbian-build/output/images/$FILENAME"
+          BUCKET="armbian-builds"
 
-          # Create version folder and upload
-          GDRIVE_PATH="armbian-builds/turing-rk1/${VERSION}"
-          rclone mkdir "gdrive:${GDRIVE_PATH}"
+          # Upload image file
+          rclone copy "$IMAGE_FILE" "r2:${BUCKET}/turing-rk1/${VERSION}/" --progress --s3-chunk-size=64M
 
-          # Upload image and checksum files
-          rclone copy "$IMAGE_FILE" "gdrive:${GDRIVE_PATH}/" --progress
-          rclone copy "armbian-build/output/images/" "gdrive:${GDRIVE_PATH}/" --include "*.sha" --include "*.txt" --progress
+          # Upload checksum and info files
+          rclone copy "armbian-build/output/images/" "r2:${BUCKET}/turing-rk1/${VERSION}/" --include "*.sha" --include "*.txt" --progress
 
-          # Get the file ID for the uploaded image
-          FILE_INFO=$(rclone lsjson "gdrive:${GDRIVE_PATH}/${FILENAME}" 2>/dev/null | jq -r '.[0].ID // empty')
-
-          if [ -n "$FILE_INFO" ]; then
-            DOWNLOAD_URL="https://drive.google.com/open?id=${FILE_INFO}"
-            echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
-            echo "Uploaded to: $DOWNLOAD_URL"
+          # Construct public URL (requires R2 public access enabled)
+          # Format: https://pub-{hash}.r2.dev/{path} or custom domain
+          R2_PUBLIC_URL="${{ secrets.R2_PUBLIC_URL }}"
+          if [ -n "$R2_PUBLIC_URL" ]; then
+            DOWNLOAD_URL="${R2_PUBLIC_URL}/turing-rk1/${VERSION}/${FILENAME}"
           else
-            echo "Warning: Could not get file ID, using path-based URL"
-            DOWNLOAD_URL="https://drive.google.com/drive/folders/${{ secrets.GDRIVE_FOLDER_ID }}"
-            echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+            # Fallback to endpoint-based URL (requires signed URLs or public bucket)
+            DOWNLOAD_URL="${{ secrets.R2_ENDPOINT }}/armbian-builds/turing-rk1/${VERSION}/${FILENAME}"
           fi
+          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "Uploaded to: $DOWNLOAD_URL"
 
           # List uploaded files
           echo "Uploaded files:"
-          rclone ls "gdrive:${GDRIVE_PATH}/"
+          rclone ls "r2:${BUCKET}/turing-rk1/${VERSION}/"
 
       - name: Update images.json
         run: |
           VERSION="${{ needs.check-version.outputs.upstream_version }}"
           DATE=$(date -u +%Y-%m-%d)
           DOWNLOAD_URL="${{ steps.upload.outputs.download_url }}"
-          GDRIVE_FOLDER="https://drive.google.com/drive/folders/${{ secrets.GDRIVE_FOLDER_ID }}"
 
           # Initialize images.json if it doesn't exist
           if [ ! -f images.json ]; then
@@ -218,7 +207,6 @@ jobs:
              --arg size "${{ steps.metadata.outputs.size }}" \
              --arg sha256 "${{ steps.metadata.outputs.sha256 }}" \
              --arg download_url "$DOWNLOAD_URL" \
-             --arg gdrive_folder "$GDRIVE_FOLDER" \
           '.latest = {
             armbian_version: $version,
             kernel_version: $kernel,
@@ -228,8 +216,7 @@ jobs:
             filename: $filename,
             size_bytes: ($size | tonumber),
             sha256: $sha256,
-            download_url: $download_url,
-            gdrive_folder: $gdrive_folder
+            download_url: $download_url
           } | .history = ([{
             armbian_version: $version,
             build_date: $date,
