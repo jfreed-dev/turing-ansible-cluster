@@ -39,12 +39,14 @@ echo "$(jq -r '.latest.sha256' images.json)  $(jq -r '.latest.filename' images.j
 # Decompress
 xz -d Armbian-*.img.xz
 
-# Prepare for specific node (injects SSH key, static IP)
+# Prepare for specific node (installs packages, SSH key, static IP)
 ./scripts/prepare-armbian-image.sh Armbian-*.img 1
 
 # Flash to node
 tpi flash --node 1 --image-path Armbian-*.img
 ```
+
+See [Image Preparation](#image-preparation) for full details on the prepare script.
 
 See [images.json](../images.json) for full metadata including download URLs and checksums.
 
@@ -350,6 +352,126 @@ If you don't need customization, download official images:
 
 > **Note**: Pre-built images may not have the latest vendor kernel with NPU support. Building your own ensures you get the `vendor` branch kernel.
 
+## Image Preparation
+
+The `prepare-armbian-image.sh` script prepares a generic Armbian image for deployment by:
+
+- **Installing packages** via chroot (open-iscsi, nfs-common, curl, etc.)
+- **Injecting SSH keys** directly into the image
+- **Configuring hostname and static IP** for specific nodes
+- **Setting up first-boot autoconfig** to skip interactive wizard
+
+### Prerequisites (x86_64 hosts only)
+
+When running on x86_64 to prepare aarch64 images, QEMU user-mode emulation is required:
+
+```bash
+sudo apt-get install qemu-user-static binfmt-support
+```
+
+The script auto-detects cross-architecture and skips package installation if QEMU is unavailable.
+
+### Basic Usage
+
+```bash
+# Prepare image for node 3 (installs packages, sets hostname, static IP)
+./scripts/prepare-armbian-image.sh Armbian-*.img 3
+
+# Prepare generic image (DHCP, no hostname set)
+./scripts/prepare-armbian-image.sh Armbian-*.img
+```
+
+### Node Configuration
+
+When a node number (1-4) is specified, the script configures:
+
+| Node | Hostname | Static IP |
+|------|----------|-----------|
+| 1 | node1 | 10.10.88.73 |
+| 2 | node2 | 10.10.88.74 |
+| 3 | node3 | 10.10.88.75 |
+| 4 | node4 | 10.10.88.76 |
+
+### Packages Installed
+
+The following packages are installed for K3s and Longhorn compatibility:
+
+```
+open-iscsi nfs-common curl wget git htop jq rsync vim
+```
+
+iSCSI services (`iscsid.socket`, `iscsid.service`) are enabled automatically.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROOT_PASSWORD` | `Turing@Rk1#2024` | Root password for first boot |
+| `SSH_PUBKEY_FILE` | `~/.ssh/workbench.pub` | SSH public key to inject |
+| `TIMEZONE` | `America/Chicago` | System timezone |
+| `SKIP_PACKAGES` | `false` | Set to `true` to skip package installation |
+
+### Examples
+
+```bash
+# Custom SSH key
+SSH_PUBKEY_FILE=~/.ssh/id_ed25519.pub ./scripts/prepare-armbian-image.sh Armbian.img 1
+
+# Custom root password
+ROOT_PASSWORD="MySecurePass123" ./scripts/prepare-armbian-image.sh Armbian.img 2
+
+# Skip package installation (faster, SSH/network config only)
+SKIP_PACKAGES=true ./scripts/prepare-armbian-image.sh Armbian.img 3
+
+# Different timezone
+TIMEZONE="UTC" ./scripts/prepare-armbian-image.sh Armbian.img 4
+```
+
+### Prepare All Nodes
+
+```bash
+# Decompress image once
+xz -dk Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz
+
+# Create copies for each node
+for n in 1 2 3 4; do
+  cp Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img node${n}.img
+  ./scripts/prepare-armbian-image.sh node${n}.img $n
+done
+
+# Flash all nodes
+for n in 1 2 3 4; do
+  tpi flash --node $n --image-path node${n}.img
+done
+```
+
+### What Gets Configured
+
+After running the script, the image contains:
+
+| File | Contents |
+|------|----------|
+| `/root/.ssh/authorized_keys` | Your SSH public key |
+| `/etc/hostname` | Node hostname (e.g., `node1`) |
+| `/etc/hosts` | Cluster node entries |
+| `/etc/netplan/10-static.yaml` | Static IP configuration |
+| `/root/.not_logged_in_yet` | Armbian first-boot autoconfig |
+
+### After Boot
+
+Nodes are immediately accessible via SSH:
+
+```bash
+# SSH to node (no password prompt)
+ssh root@10.10.88.73
+
+# Verify packages installed
+dpkg -l | grep -E 'open-iscsi|nfs-common'
+
+# Verify iSCSI ready for Longhorn
+systemctl status iscsid
+```
+
 ## Image Distribution
 
 Share Armbian builds with team members or across machines using Google Drive.
@@ -430,22 +552,31 @@ FILE_ID  (just the ID string)
 ### Complete Workflow
 
 ```bash
-# 1. Build image
+# 1. Build image (or download pre-built)
 cd ~/armbian-build
 ./compile.sh build BOARD=turing-rk1 BRANCH=vendor RELEASE=bookworm
 
-# 2. Upload to Google Drive
+# 2. Upload to Google Drive (optional, for sharing)
 ./scripts/upload-armbian-image.sh output/images/Armbian-*.img stable
 # → Outputs: https://drive.google.com/file/d/1abc.../view
 
-# 3. On target machine: download
+# 3. On target machine: download (if shared)
 ./scripts/download-armbian-image.sh 'https://drive.google.com/file/d/1abc...'
 
 # 4. Prepare image for specific node
-./scripts/prepare-armbian-image.sh Armbian_24.11_Turing-rk1.img 1
+#    - Installs packages (open-iscsi, nfs-common, etc.)
+#    - Injects SSH key
+#    - Configures hostname and static IP
+./scripts/prepare-armbian-image.sh Armbian-*.img 1
 
 # 5. Flash to node
-tpi flash --node 1 --image-path Armbian_24.11_Turing-rk1.img
+tpi flash --node 1 --image-path Armbian-*.img
+
+# 6. SSH immediately (no password, packages ready)
+ssh root@10.10.88.73
+
+# 7. Run Ansible to complete setup
+ansible-playbook -i inventories/server/hosts.yml playbooks/site.yml --limit node1
 ```
 
 ## Next Steps
