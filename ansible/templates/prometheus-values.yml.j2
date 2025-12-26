@@ -36,7 +36,7 @@ alertmanager:
               storage: 5Gi
 
 grafana:
-  adminPassword: admin
+  adminPassword: "{{ grafana_admin_password | default('admin') }}"
   persistence:
     enabled: true
     storageClassName: longhorn

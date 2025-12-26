@@ -246,7 +246,7 @@ sudo ./scripts/prepare-armbian-image.sh \
   1
 
 # Or with custom settings
-ROOT_PASSWORD="MySecurePass123!" \
+ROOT_PASSWORD="<YOUR_SECURE_PASSWORD>" \
 SSH_PUBKEY_FILE=~/.ssh/id_rsa.pub \
 sudo ./scripts/prepare-armbian-image.sh image.img 2
 ```
@@ -325,10 +325,10 @@ sudo losetup -d /dev/loopX
 
 | Directive | Description | Example |
 |-----------|-------------|---------|
-| `PRESET_ROOT_PASSWORD` | Root password | `"SecurePass123!"` |
+| `PRESET_ROOT_PASSWORD` | Root password | `"<YOUR_PASSWORD>"` |
 | `PRESET_USER_SHELL` | Default shell | `"bash"` or `"zsh"` |
 | `PRESET_USER_NAME` | Create user (empty=skip) | `"admin"` |
-| `PRESET_USER_PASSWORD` | User password | `"userpass"` |
+| `PRESET_USER_PASSWORD` | User password | `"<YOUR_PASSWORD>"` |
 | `PRESET_LOCALE` | System locale | `"en_US.UTF-8"` |
 | `PRESET_TIMEZONE` | Timezone | `"America/New_York"` |
 | `PRESET_NET_CHANGE_DEFAULTS` | Enable network config | `"1"` |
@@ -371,7 +371,7 @@ Armbian requires interactive setup on first boot:
 3. **User creation**: Create user or press Ctrl-C to skip
 4. **SSH public key**: Add your SSH public key for passwordless access
 
-> **Important:** The default root password (`Turing@Rk1#2024`) is set by the `prepare-armbian-image.sh` script. For Ansible automation, this password is stored in `ansible/secrets/server.yml`. Update this file if you change the password.
+> **Important:** Set a strong root password in the `prepare-armbian-image.sh` script or via the `ROOT_PASSWORD` environment variable. For Ansible automation, store credentials in `ansible/secrets/server.yml` (see `server.yml.example` for the template).
 
 ### Via UART Console
 

@@ -13,8 +13,9 @@ override.tf.json
 
 # Ansible
 *.retry
-inventory/*.yml
-!inventory/*.yml.example
+
+# For new environments, you can create custom inventories that are gitignored:
+# ansible/inventories/custom/hosts.yml (copy from hosts.yml.example)
 
 # Secrets and credentials
 ansible/secrets/*.yml

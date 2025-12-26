@@ -1,0 +1,84 @@
+---
+# Example inventory for Turing Pi RK1 cluster
+# Copy this file to hosts.yml and customize for your environment:
+#   cp hosts.yml.example hosts.yml
+
+all:
+  vars:
+    # SSH connection settings
+    ansible_user: root
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    # Environment identifier
+    target_environment: server
+
+    # Turing Pi BMC - update with your BMC IP
+    tpi_bmc_host: 192.168.1.10
+
+    # Cluster configuration
+    cluster_name: turing-cluster
+    cluster_domain: cluster.local
+
+    # Networking - adjust CIDRs to avoid conflicts with your network
+    pod_cidr: "10.244.0.0/16"
+    service_cidr: "10.96.0.0/12"
+    cluster_dns: "10.96.0.10"
+
+    # MetalLB - use IPs from your local network
+    metallb_ip_range: "192.168.1.80-192.168.1.89"
+    ingress_ip: "192.168.1.80"
+
+    # Portainer (optional external server)
+    portainer_server: "192.168.1.100"
+    portainer_port: 9001
+
+    # Storage
+    longhorn_path: /var/lib/longhorn
+    longhorn_replicas: 2
+
+    # K3s version (token loaded from secrets/server.yml)
+    k3s_version: "v1.31.3+k3s1"
+
+    # NPU/RKNN
+    rknn_version: "2.3.2"
+    install_rknn: true
+
+  children:
+    controlplane:
+      hosts:
+        node1:
+          ansible_host: 192.168.1.11  # Your control plane IP
+          tpi_node: 1
+          k3s_role: server
+          has_nvme: false
+
+    workers:
+      hosts:
+        node2:
+          ansible_host: 192.168.1.12  # Worker 1 IP
+          tpi_node: 2
+          k3s_role: agent
+          has_nvme: true
+        node3:
+          ansible_host: 192.168.1.13  # Worker 2 IP
+          tpi_node: 3
+          k3s_role: agent
+          has_nvme: true
+        node4:
+          ansible_host: 192.168.1.14  # Worker 3 IP
+          tpi_node: 4
+          k3s_role: agent
+          has_nvme: true
+
+    k3s_cluster:
+      children:
+        controlplane:
+        workers:
+
+    # Nodes with NPU capability
+    npu_nodes:
+      children:
+        controlplane:
+        workers:
