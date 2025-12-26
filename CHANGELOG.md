@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2025-12-26
+
+### Changed
+
+- Enhanced `prepare-armbian-image.sh` script
+  - Installs required packages via chroot (open-iscsi, nfs-common, curl, etc.)
+  - Enables iSCSI services for Longhorn compatibility
+  - SSH keys injected directly (no manual provisioning needed)
+  - Hostnames updated to match Ansible inventory (node1-4)
+  - Auto-detects cross-architecture and uses QEMU if available
+  - SKIP_PACKAGES=true option to skip package installation
+
 ## [1.1.8] - 2025-12-26
 
 ### Added
@@ -169,6 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.1.9]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.8...v1.1.9
 [1.1.8]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.7...v1.1.8
 [1.1.7]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.6...v1.1.7
 [1.1.6]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.5...v1.1.6
