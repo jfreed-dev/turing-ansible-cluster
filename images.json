@@ -4,13 +4,11 @@
     "kernel_version": "6.1.115",
     "release": "bookworm",
     "branch": "vendor",
-    "build_date": "2025-12-24",
+    "build_date": "2025-12-26",
     "filename": "Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz",
-    "size_bytes": 514725992,
-    "sha256": "a4f42c5c88bea566e2663e039cec43b4e1a46c5112118f5bcee746c1f16a58c1",
-    "download_url": "https://drive.google.com/open?id=16wa6dNsBJSYoPg9lZnpThxMcdxHxbwf9",
-    "checksum_url": null,
-    "release_url": null
+    "size_bytes": 595416012,
+    "sha256": "39754cbf32f3f3cc8b20c74165eee11ba7f7e6f1b04af299ff7917514f549658",
+    "download_url": "https://pub-ed9687a22c6a44e1a25fc75be91384a4.r2.dev/turing-rk1/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz"
   },
   "history": [
     {
