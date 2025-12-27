@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2025-12-27
+
+### Changed
+
+- Renamed Ansible roles to use underscores for ansible-lint compliance
+  - `k3s-agent` → `k3s_agent`
+  - `k3s-prereq` → `k3s_prereq`
+  - `k3s-server` → `k3s_server`
+  - `nginx-ingress` → `nginx_ingress`
+  - `prometheus-stack` → `prometheus_stack`
+- Fixed variable naming to use role prefixes
+  - `k3s_server_token` → `k3s_agent_server_token`
+  - `k3s_server_url` → `k3s_agent_server_url`
+  - `ingress_controller` → `nginx_ingress_controller`
+- Removed `role-name` skip from `.ansible-lint` (now fully compliant)
+
 ## [1.3.2] - 2025-12-27
 
 ### Changed
@@ -274,6 +290,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.3]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.1...v1.3.0
