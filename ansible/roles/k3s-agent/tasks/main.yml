@@ -40,6 +40,8 @@
     mode: "0755"
   when: not k3s_agent_binary.stat.exists
 
+# Security: The install script verifies the k3s binary using SHA256 checksums
+# from GitHub releases. We verify the installed binary post-installation.
 - name: Install k3s agent
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
@@ -49,6 +51,12 @@
   args:
     creates: /usr/local/bin/k3s
   register: k3s_agent_install
+
+- name: Verify k3s binary version matches expected
+  ansible.builtin.command: /usr/local/bin/k3s --version
+  register: k3s_agent_version_check
+  changed_when: false
+  failed_when: k3s_version not in k3s_agent_version_check.stdout
 
 - name: Ensure k3s-agent service is started
   ansible.builtin.systemd:

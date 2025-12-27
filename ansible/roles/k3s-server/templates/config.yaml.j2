@@ -20,8 +20,8 @@ tls-san:
 # Flannel (default CNI, matches Talos)
 flannel-backend: vxlan
 
-# Write kubeconfig with correct permissions
-write-kubeconfig-mode: "0644"
+# Write kubeconfig with secure permissions (owner-only access)
+write-kubeconfig-mode: "0600"
 
 # Kubelet args for Longhorn
 kubelet-arg:
