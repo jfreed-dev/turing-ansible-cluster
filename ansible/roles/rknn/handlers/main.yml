@@ -1,0 +1,6 @@
+---
+- name: Restart rkllama
+  ansible.builtin.systemd:
+    name: rkllama
+    state: restarted
+    daemon_reload: true

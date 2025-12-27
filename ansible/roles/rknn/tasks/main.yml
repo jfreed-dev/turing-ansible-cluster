@@ -129,6 +129,22 @@
     msg: "Model {{ rkllm_model_name }} downloaded to {{ rkllm_model_path }}"
   when: model_download is changed
 
+- name: Deploy rkllama systemd service
+  ansible.builtin.template:
+    src: rkllama.service.j2
+    dest: /etc/systemd/system/rkllama.service
+    mode: "0644"
+  notify: Restart rkllama
+  when: rkllama_service_enabled
+
+- name: Enable and start rkllama service
+  ansible.builtin.systemd:
+    name: rkllama
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: rkllama_service_enabled
+
 - name: Verify NPU is accessible
   ansible.builtin.shell: |
     set -o pipefail

@@ -14,3 +14,8 @@ rkllm_tokenizer: Qwen/Qwen2.5-1.5B-Instruct
 
 # Skip model download if true (for faster deploys when model already exists)
 rkllm_skip_model_download: false
+
+# rkllama service configuration
+rkllama_service_enabled: true
+rkllama_service_port: 8080
+rkllama_target_platform: rk3588

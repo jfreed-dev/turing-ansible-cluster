@@ -1,0 +1,19 @@
+[Unit]
+Description=RKLLAMA LLM Server for RK3588 NPU
+After=network.target
+Documentation=https://github.com/jfreed-dev/rkllama
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rkllama
+Environment="PATH={{ rkllama_venv_path }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart={{ rkllama_venv_path }}/bin/python3 /opt/rkllama/server.py --target_platform {{ rkllama_target_platform }} --port {{ rkllama_service_port }}
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
