@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2025-12-27
+
+### Changed
+
+- Removed default Grafana password from playbook output (use secrets file)
+- Added security warnings for `TURINGPI_INSECURE` flag (TLS bypass)
+- Added security comments for git clone operations documenting repo trust
+- Pinned Ansible collection versions for reproducible builds
+  - kubernetes.core: 6.2.0
+  - community.general: 12.1.0
+  - ansible.posix: 2.1.0
+
 ## [1.3.1] - 2025-12-27
 
 ### Fixed
@@ -262,6 +274,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.2]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.0...v1.2.1
