@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-26
+
+### Added
+
+- NPU LLM API service with systemd integration
+  - rkllama Flask server runs on each node (port 8080)
+  - Auto-starts on boot, restarts on failure
+  - OpenAI-compatible `/generate` endpoint
+- DeepSeek 1.5B model auto-download (~1.9GB)
+  - Pre-configured Modelfile for API server
+  - Symlinked from `/opt/rkllama/models/` to `~/RKLLAMA/models/`
+- Python virtual environment at `/opt/rkllama/venv`
+  - Bypasses Debian externally-managed-environment restrictions
+  - Includes transformers, flask, huggingface_hub
+- NPU API documentation (`docs/NPU-API.md`)
+  - Full endpoint reference with examples
+  - Python client examples
+  - Load balancing guide
+  - Troubleshooting section
+
+### Changed
+
+- Updated README NPU section with API quick start
+- Enhanced rknn role with service deployment tasks
+- Added handlers for service restart on config changes
+
 ## [1.2.1] - 2025-12-26
 
 ### Changed
@@ -213,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.9...v1.2.0
 [1.1.9]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.8...v1.1.9
