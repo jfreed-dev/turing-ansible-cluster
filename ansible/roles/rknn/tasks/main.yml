@@ -1,7 +1,7 @@
 ---
 # RKNN Runtime Installation
-# Installs only runtime components needed for NPU inference
-# Dev tools (rknn-toolkit2, ezrknpu) are NOT installed to save ~10GB per node
+# Installs runtime components needed for NPU inference
+# Includes Python venv and DeepSeek 1.5B model
 
 - name: Install RKNN runtime dependencies
   ansible.builtin.apt:
@@ -9,6 +9,7 @@
       - python3-pip
       - python3-numpy
       - python3-dev
+      - python3-venv
     state: present
 
 - name: Create RKNN directories
@@ -20,6 +21,9 @@
     - /opt/rknn
     - /opt/rknn-llm
     - /opt/rkllama
+    - /opt/rkllama/models
+    - /root/RKLLAMA/models
+    - /root/RKLLAMA/lib
 
 - name: Clone RKNN-LLM runtime
   ansible.builtin.git:
@@ -31,7 +35,6 @@
 - name: Install RKNN runtime library from rknn-llm
   ansible.builtin.shell: |
     set -o pipefail
-    # Find and install the runtime library
     LIBPATH=$(find /opt/rknn-llm -name "librknnrt.so" -path "*/Linux/*" -path "*/aarch64/*" | head -1)
     if [ -n "$LIBPATH" ]; then
       cp -f "$LIBPATH" /usr/lib/
@@ -51,25 +54,37 @@
     dest: /opt/rkllama
     version: main
     depth: 1
+    force: true
 
-- name: Install rkllama Python dependencies
-  ansible.builtin.pip:
-    requirements: /opt/rkllama/requirements.txt
-    executable: pip3
-    extra_args: --break-system-packages
-  failed_when: false
+- name: Create symlink for rkllama lib
+  ansible.builtin.file:
+    src: /opt/rkllama/lib
+    dest: /root/RKLLAMA/lib
+    state: link
+    force: true
 
-- name: Install LLM server Python dependencies
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: python3 -m venv {{ rkllama_venv_path }}
+    creates: "{{ rkllama_venv_path }}/bin/python"
+
+- name: Upgrade pip in venv
   ansible.builtin.pip:
     name:
-      - flask==2.2.2
-      - Werkzeug==2.2.2
+      - pip
+      - wheel
+    state: latest
+    virtualenv: "{{ rkllama_venv_path }}"
+
+- name: Install rkllama Python dependencies in venv
+  ansible.builtin.pip:
+    name:
+      - flask
       - python-dotenv
       - huggingface_hub
       - transformers
-    executable: pip3
-    extra_args: --break-system-packages
-  failed_when: false
+      - numpy
+    virtualenv: "{{ rkllama_venv_path }}"
 
 - name: Create RKNN environment script
   ansible.builtin.copy:
@@ -78,13 +93,36 @@
       # RKNN Runtime Environment
       export RKNN_LLM_PATH=/opt/rknn-llm
       export RKLLAMA_PATH=/opt/rkllama
-      export PATH=$PATH:$RKLLAMA_PATH
+      export RKLLAMA_VENV={{ rkllama_venv_path }}
+      export PATH=$PATH:$RKLLAMA_PATH:$RKLLAMA_VENV/bin
     mode: "0644"
+
+- name: Check if model already exists
+  ansible.builtin.stat:
+    path: "{{ rkllm_model_path }}"
+  register: model_file
+
+- name: Download DeepSeek 1.5B model
+  ansible.builtin.get_url:
+    url: "{{ rkllm_model_url }}"
+    dest: "{{ rkllm_model_path }}"
+    mode: "0644"
+    timeout: 600
+  when:
+    - not rkllm_skip_model_download
+    - not model_file.stat.exists
+  register: model_download
+  retries: 2
+  delay: 10
+
+- name: Display model download status
+  ansible.builtin.debug:
+    msg: "Model {{ rkllm_model_name }} downloaded to {{ rkllm_model_path }}"
+  when: model_download is changed
 
 - name: Verify NPU is accessible
   ansible.builtin.shell: |
     set -o pipefail
-    # Modern rknpu driver (v0.9.6+) uses DRM subsystem
     if [ -c /dev/dri/renderD129 ]; then
       echo "NPU device found at /dev/dri/renderD129"
       ls -la /dev/dri/renderD129
@@ -105,3 +143,34 @@
 - name: Display NPU status
   ansible.builtin.debug:
     var: rknn_npu_check.stdout_lines
+
+- name: Test RKLLM model loading
+  ansible.builtin.shell: |
+    {{ rkllama_venv_path }}/bin/python3 << 'EOF'
+    import sys
+    sys.path.insert(0, '/opt/rkllama')
+    from src.rkllm import RKLLM
+    import time
+
+    print("Loading model...")
+    start = time.time()
+    llm = RKLLM('{{ rkllm_model_path }}')
+    elapsed = time.time() - start
+    print(f"Model loaded in {elapsed:.1f}s")
+
+    with open('/sys/kernel/debug/rknpu/load') as f:
+        print(f"NPU: {f.read().strip()}")
+
+    llm.release()
+    print("RKLLM test passed!")
+    EOF
+  args:
+    executable: /bin/bash
+  register: rkllm_test
+  changed_when: false
+  when: model_file.stat.exists or model_download is changed
+
+- name: Display RKLLM test result
+  ansible.builtin.debug:
+    var: rkllm_test.stdout_lines
+  when: rkllm_test is defined and rkllm_test.stdout_lines is defined

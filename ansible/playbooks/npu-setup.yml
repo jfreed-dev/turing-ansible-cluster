@@ -52,23 +52,42 @@
         msg: |
           NPU Setup Complete!
 
-          Installed (runtime only, ~800MB):
+          Installed:
           - RKNN-LLM runtime at /opt/rknn-llm
           - rkllama server at /opt/rkllama
-          - librknnrt.so at /usr/lib/
+          - Python venv at /opt/rkllama/venv
+          - DeepSeek 1.5B model at /opt/rkllama/models/deepseek-1.5b.rkllm
 
           NPU Device: /dev/dri/renderD129 (via DRM subsystem)
           Driver: rknpu v0.9.8+
 
-          Quick Start - Run LLM on NPU:
+          Quick Start - Run LLM Inference:
 
-          1. Download a model from HuggingFace:
-             huggingface-cli download VRxiaojie/DeepSeek-R1-Distill-Qwen-1.5B-RK3588S-RKLLM1.1.4 \
-               --local-dir /tmp/model
+          1. Activate the venv:
+             source /opt/rkllama/venv/bin/activate
 
-          2. Start the rkllama server:
+          2. Test inference:
              cd /opt/rkllama
-             python3 server.py --target_platform rk3588 --port 8080
+             python3 << 'EOF'
+             import sys
+             sys.path.insert(0, '.')
+             from src.rkllm import RKLLM
+             import src.variables as variables
+             from transformers import AutoTokenizer
+             import threading
+
+             tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct')
+             llm = RKLLM('/opt/rkllama/models/deepseek-1.5b.rkllm')
+
+             messages = [{'role': 'user', 'content': 'What is 2+2?'}]
+             tokens = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)
+
+             variables.global_text = []
+             thread = threading.Thread(target=llm.run, args=(tokens,))
+             thread.start()
+             thread.join()
+             llm.release()
+             EOF
 
           3. Check NPU status:
              cat /sys/kernel/debug/rknpu/version
