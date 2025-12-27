@@ -27,7 +27,6 @@ jobs:
         working-directory: ansible
         run: |
           yamllint -c ../.yamllint .
-        continue-on-error: true
 
       - name: Run ansible-lint
         working-directory: ansible
