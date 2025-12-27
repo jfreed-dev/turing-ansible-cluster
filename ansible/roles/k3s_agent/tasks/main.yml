@@ -1,8 +1,8 @@
 ---
 - name: Get server token from control plane
   ansible.builtin.set_fact:
-    k3s_server_token: "{{ hostvars[groups['controlplane'][0]]['k3s_server_token'] }}"
-    k3s_server_url: "{{ hostvars[groups['controlplane'][0]]['k3s_server_url'] }}"
+    k3s_agent_server_token: "{{ hostvars[groups['controlplane'][0]]['k3s_server_token'] }}"
+    k3s_agent_server_url: "{{ hostvars[groups['controlplane'][0]]['k3s_server_url'] }}"
 
 - name: Check if k3s-agent is already installed
   ansible.builtin.stat:
@@ -45,8 +45,8 @@
 - name: Install k3s agent
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
-    K3S_URL: "{{ k3s_server_url }}"
-    K3S_TOKEN: "{{ k3s_server_token }}"
+    K3S_URL: "{{ k3s_agent_server_url }}"
+    K3S_TOKEN: "{{ k3s_agent_server_token }}"
   ansible.builtin.command: /tmp/k3s-install.sh agent
   args:
     creates: /usr/local/bin/k3s

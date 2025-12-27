@@ -42,7 +42,7 @@
     kind: Deployment
     namespace: ingress-nginx
     name: ingress-nginx-controller
-  register: ingress_controller
-  until: ingress_controller.resources[0].status.readyReplicas | default(0) >= 1
+  register: nginx_ingress_controller
+  until: nginx_ingress_controller.resources[0].status.readyReplicas | default(0) >= 1
   retries: 30
   delay: 10
