@@ -80,7 +80,6 @@ jobs:
         working-directory: terraform
         run: |
           terraform fmt -check -recursive
-        continue-on-error: true
 
       - name: Terraform Validate
         working-directory: terraform/environments/server
