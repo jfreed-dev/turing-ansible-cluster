@@ -27,7 +27,7 @@ Deploy a 4-node K3s cluster on Turing Pi with:
 - Terraform >= 1.5
 - Ansible >= 2.15
 - Turing Pi BMC access
-- Armbian image (see [Building Armbian](#building-armbian) or download from [armbian.com/turing-rk1](https://www.armbian.com/turing-rk1/))
+- Armbian image (see [Building Armbian](#building-armbian) or [download pre-built](https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz))
 
 ## Quick Start
 
