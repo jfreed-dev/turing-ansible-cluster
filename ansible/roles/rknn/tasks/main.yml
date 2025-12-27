@@ -56,6 +56,15 @@
     depth: 1
     force: true
 
+- name: Remove existing lib directory if not a symlink
+  ansible.builtin.file:
+    path: /root/RKLLAMA/lib
+    state: absent
+  when: ansible_facts['os_family'] == 'Debian'
+  register: lib_dir_check
+  failed_when: false
+  changed_when: lib_dir_check.changed | default(false)
+
 - name: Create symlink for rkllama lib
   ansible.builtin.file:
     src: /opt/rkllama/lib
