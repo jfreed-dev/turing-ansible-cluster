@@ -129,6 +129,29 @@
     msg: "Model {{ rkllm_model_name }} downloaded to {{ rkllm_model_path }}"
   when: model_download is changed
 
+- name: Create model directory for rkllama server
+  ansible.builtin.file:
+    path: /root/RKLLAMA/models/DeepSeek-R1-1.5B
+    state: directory
+    mode: "0755"
+
+- name: Create Modelfile for DeepSeek model
+  ansible.builtin.copy:
+    dest: /root/RKLLAMA/models/DeepSeek-R1-1.5B/Modelfile
+    content: |
+      FROM="DeepSeek-R1-1.5B.rkllm"
+      HUGGINGFACE_PATH="{{ rkllm_tokenizer }}"
+      SYSTEM=""
+      TEMPERATURE=1.0
+    mode: "0644"
+
+- name: Symlink model file for rkllama server
+  ansible.builtin.file:
+    src: "{{ rkllm_model_path }}"
+    dest: /root/RKLLAMA/models/DeepSeek-R1-1.5B/DeepSeek-R1-1.5B.rkllm
+    state: link
+    force: true
+
 - name: Deploy rkllama systemd service
   ansible.builtin.template:
     src: rkllama.service.j2
