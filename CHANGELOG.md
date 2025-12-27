@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-12-27
+
+### Fixed
+
+- Security: Kubeconfig permissions changed from 0644 to 0600 (owner-only access)
+- Security: SSH StrictHostKeyChecking now uses `accept-new` instead of disabled
+  - Accepts new host keys on first connection
+  - Detects MITM attacks on subsequent connections
+- Security: Added k3s binary version verification after installation
+- Ansible role variable naming to follow `role_prefix_` convention
+  - `base` role: `kernel_modules` → `base_kernel_modules`, etc.
+  - `rknn` role: `rkllama_*` → `rknn_*`
+- Shell tasks with pipes now use `set -o pipefail` for proper error handling
+- YAML line length violations in playbooks
+- Broken Armbian download link (armbian.com/turing-rk1 → armbian-builds.techki.to)
+- Broken rkllama GitHub link in NPU-API docs (notpunhnox → jfreed-dev)
+
+### Changed
+
+- Replaced `systemctl` command with `ansible.builtin.systemd` module in bootstrap.yml
+- Pip upgrade task uses `state: present` with `--upgrade` instead of `state: latest`
+- Added `# noqa: no-handler` for appropriate debug tasks
+
 ## [1.3.0] - 2025-12-26
 
 ### Added
@@ -239,6 +262,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.1.9...v1.2.0
