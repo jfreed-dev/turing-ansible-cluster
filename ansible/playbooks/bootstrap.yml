@@ -60,14 +60,14 @@
 
   post_tasks:
     - name: Verify iSCSI is running
-      ansible.builtin.command: systemctl is-active iscsid
+      ansible.builtin.systemd:
+        name: iscsid
       register: bootstrap_iscsid_status
-      changed_when: false
       failed_when: false
 
     - name: Display iSCSI status
       ansible.builtin.debug:
-        msg: "iSCSI status: {{ bootstrap_iscsid_status.stdout }}"
+        msg: "iSCSI status: {{ bootstrap_iscsid_status.status.ActiveState | default('unknown') }}"
 
     - name: Verify Longhorn directory exists
       ansible.builtin.stat:

@@ -196,9 +196,12 @@
 
     - name: Check if nodes need disk cleanup
       ansible.builtin.shell: |
+        set -o pipefail
         k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item }} \
           -o jsonpath='{.status.diskStatus}' 2>/dev/null | \
           grep -q "diskUUID doesn't match" && echo "needs_cleanup" || echo "ok"
+      args:
+        executable: /bin/bash
       loop: "{{ target_nodes }}"
       register: recover_disk_status
       changed_when: false
@@ -206,8 +209,11 @@
 
     - name: Get old disk names for cleanup
       ansible.builtin.shell: |
+        set -o pipefail
         k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item.item }} \
           -o jsonpath='{range .spec.disks.*}{@.path}|{end}' 2>/dev/null | tr '|' '\n' | head -1
+      args:
+        executable: /bin/bash
       loop: "{{ recover_disk_status.results | default([]) }}"
       register: recover_old_disks
       when:
@@ -217,16 +223,23 @@
 
     - name: Remove stale Longhorn disks
       ansible.builtin.shell: |
+        set -o pipefail
         # Get disk names and remove them
         DISKS=$(k3s kubectl get nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
           -o jsonpath='{.spec.disks}' | jq -r 'keys[]')
         for disk in $DISKS; do
           k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
-            --type=json -p="[{\"op\": \"replace\", \"path\": \"/spec/disks/$disk/allowScheduling\", \"value\": false}]" || true
+            --type=json \
+            -p="[{\"op\": \"replace\", \"path\": \"/spec/disks/$disk/allowScheduling\", \"value\": false}]" \
+            || true
           sleep 2
           k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item.item.item }} \
-            --type=json -p="[{\"op\": \"remove\", \"path\": \"/spec/disks/$disk\"}]" || true
+            --type=json \
+            -p="[{\"op\": \"remove\", \"path\": \"/spec/disks/$disk\"}]" \
+            || true
         done
+      args:
+        executable: /bin/bash
       loop: "{{ recover_disk_status.results | default([]) }}"
       when:
         - not (skip_longhorn | default(false))
@@ -236,14 +249,31 @@
     - name: Wait for disk sync
       ansible.builtin.pause:
         seconds: 10
+      vars:
+        needs_cleanup_nodes: >-
+          {{ recover_disk_status.results | default([])
+             | selectattr('stdout', 'defined')
+             | selectattr('stdout', 'equalto', 'needs_cleanup')
+             | list }}
       when:
         - not (skip_longhorn | default(false))
-        - recover_disk_status.results | selectattr('stdout', 'defined') | selectattr('stdout', 'equalto', 'needs_cleanup') | list | length > 0
+        - needs_cleanup_nodes | length > 0
 
     - name: Add Longhorn disk to recovered nodes
+      vars:
+        longhorn_disk_spec:
+          spec:
+            allowScheduling: true
+            evictionRequested: false
+            disks:
+              nvme-longhorn:
+                path: /var/lib/longhorn
+                allowScheduling: true
+                storageReserved: 0
+                tags: []
       ansible.builtin.command: >
         k3s kubectl patch nodes.longhorn.io -n longhorn-system {{ item }}
-        --type=merge -p '{"spec":{"allowScheduling":true,"evictionRequested":false,"disks":{"nvme-longhorn":{"path":"/var/lib/longhorn","allowScheduling":true,"storageReserved":0,"tags":[]}}}}'
+        --type=merge -p '{{ longhorn_disk_spec | to_json }}'
       loop: "{{ target_nodes }}"
       register: recover_add_disk
       until: recover_add_disk.rc == 0

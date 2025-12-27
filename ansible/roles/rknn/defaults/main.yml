@@ -2,20 +2,20 @@
 # RKNN Role Defaults
 
 # Python virtual environment for rkllama
-rkllama_venv_path: /opt/rkllama/venv
+rknn_venv_path: /opt/rkllama/venv
 
 # Default LLM model to download
-rkllm_model_name: deepseek-1.5b
-rkllm_model_url: https://huggingface.co/kautism/DeepSeek-R1-Distill-Qwen-1.5B-RK3588S-RKLLM1.1.4/resolve/main/model.rkllm
-rkllm_model_path: /opt/rkllama/models/deepseek-1.5b.rkllm
+rknn_model_name: deepseek-1.5b
+rknn_model_url: https://huggingface.co/kautism/DeepSeek-R1-Distill-Qwen-1.5B-RK3588S-RKLLM1.1.4/resolve/main/model.rkllm
+rknn_model_path: /opt/rkllama/models/deepseek-1.5b.rkllm
 
 # Tokenizer for the model (Qwen-based for DeepSeek)
-rkllm_tokenizer: Qwen/Qwen2.5-1.5B-Instruct
+rknn_tokenizer: Qwen/Qwen2.5-1.5B-Instruct
 
 # Skip model download if true (for faster deploys when model already exists)
-rkllm_skip_model_download: false
+rknn_skip_model_download: false
 
 # rkllama service configuration
-rkllama_service_enabled: true
-rkllama_service_port: 8080
-rkllama_target_platform: rk3588
+rknn_service_enabled: true
+rknn_service_port: 8080
+rknn_target_platform: rk3588

@@ -14,13 +14,13 @@
   community.general.modprobe:
     name: "{{ item }}"
     state: present
-  loop: "{{ kernel_modules | default([]) }}"
+  loop: "{{ base_kernel_modules | default([]) }}"
 
 - name: Ensure kernel modules load on boot
   ansible.builtin.copy:
     dest: /etc/modules-load.d/k3s.conf
     content: |
-      {% for mod in kernel_modules | default([]) %}
+      {% for mod in base_kernel_modules | default([]) %}
       {{ mod }}
       {% endfor %}
     mode: "0644"
@@ -30,14 +30,14 @@
     src: sysctl-kubernetes.conf.j2
     dest: /etc/sysctl.d/99-kubernetes.conf
     mode: "0644"
-  when: sysctl_settings is defined
+  when: base_sysctl_settings is defined
   notify: Reload sysctl
 
 - name: Apply sysctl settings immediately
   ansible.builtin.command: sysctl -p /etc/sysctl.d/99-kubernetes.conf
   changed_when: true
   failed_when: false
-  when: sysctl_settings is defined
+  when: base_sysctl_settings is defined
 
 - name: Set hostname
   ansible.builtin.hostname:
@@ -57,7 +57,7 @@
 
 - name: Set timezone
   community.general.timezone:
-    name: "{{ timezone | default('America/Chicago') }}"
+    name: "{{ base_timezone | default('America/Chicago') }}"
 
 # iSCSI configuration for Longhorn
 - name: Configure iSCSI for Longhorn

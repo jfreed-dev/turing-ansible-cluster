@@ -61,9 +61,9 @@
     path: /root/RKLLAMA/lib
     state: absent
   when: ansible_facts['os_family'] == 'Debian'
-  register: lib_dir_check
+  register: rknn_lib_dir_check
   failed_when: false
-  changed_when: lib_dir_check.changed | default(false)
+  changed_when: rknn_lib_dir_check.changed | default(false)
 
 - name: Create symlink for rkllama lib
   ansible.builtin.file:
@@ -74,16 +74,17 @@
 
 - name: Create Python virtual environment
   ansible.builtin.command:
-    cmd: python3 -m venv {{ rkllama_venv_path }}
-    creates: "{{ rkllama_venv_path }}/bin/python"
+    cmd: python3 -m venv {{ rknn_venv_path }}
+    creates: "{{ rknn_venv_path }}/bin/python"
 
 - name: Upgrade pip in venv
   ansible.builtin.pip:
     name:
       - pip
       - wheel
-    state: latest
-    virtualenv: "{{ rkllama_venv_path }}"
+    state: present
+    virtualenv: "{{ rknn_venv_path }}"
+    extra_args: --upgrade
 
 - name: Install rkllama Python dependencies in venv
   ansible.builtin.pip:
@@ -93,7 +94,7 @@
       - huggingface_hub
       - transformers
       - numpy
-    virtualenv: "{{ rkllama_venv_path }}"
+    virtualenv: "{{ rknn_venv_path }}"
 
 - name: Create RKNN environment script
   ansible.builtin.copy:
@@ -102,32 +103,32 @@
       # RKNN Runtime Environment
       export RKNN_LLM_PATH=/opt/rknn-llm
       export RKLLAMA_PATH=/opt/rkllama
-      export RKLLAMA_VENV={{ rkllama_venv_path }}
+      export RKLLAMA_VENV={{ rknn_venv_path }}
       export PATH=$PATH:$RKLLAMA_PATH:$RKLLAMA_VENV/bin
     mode: "0644"
 
 - name: Check if model already exists
   ansible.builtin.stat:
-    path: "{{ rkllm_model_path }}"
-  register: model_file
+    path: "{{ rknn_model_path }}"
+  register: rknn_model_file
 
 - name: Download DeepSeek 1.5B model
   ansible.builtin.get_url:
-    url: "{{ rkllm_model_url }}"
-    dest: "{{ rkllm_model_path }}"
+    url: "{{ rknn_model_url }}"
+    dest: "{{ rknn_model_path }}"
     mode: "0644"
     timeout: 600
   when:
-    - not rkllm_skip_model_download
-    - not model_file.stat.exists
-  register: model_download
+    - not rknn_skip_model_download
+    - not rknn_model_file.stat.exists
+  register: rknn_model_download
   retries: 2
   delay: 10
 
-- name: Display model download status
+- name: Display model download status  # noqa: no-handler
   ansible.builtin.debug:
-    msg: "Model {{ rkllm_model_name }} downloaded to {{ rkllm_model_path }}"
-  when: model_download is changed
+    msg: "Model {{ rknn_model_name }} downloaded to {{ rknn_model_path }}"
+  when: rknn_model_download is changed
 
 - name: Create model directory for rkllama server
   ansible.builtin.file:
@@ -140,14 +141,14 @@
     dest: /root/RKLLAMA/models/DeepSeek-R1-1.5B/Modelfile
     content: |
       FROM="DeepSeek-R1-1.5B.rkllm"
-      HUGGINGFACE_PATH="{{ rkllm_tokenizer }}"
+      HUGGINGFACE_PATH="{{ rknn_tokenizer }}"
       SYSTEM=""
       TEMPERATURE=1.0
     mode: "0644"
 
 - name: Symlink model file for rkllama server
   ansible.builtin.file:
-    src: "{{ rkllm_model_path }}"
+    src: "{{ rknn_model_path }}"
     dest: /root/RKLLAMA/models/DeepSeek-R1-1.5B/DeepSeek-R1-1.5B.rkllm
     state: link
     force: true
@@ -158,7 +159,7 @@
     dest: /etc/systemd/system/rkllama.service
     mode: "0644"
   notify: Restart rkllama
-  when: rkllama_service_enabled
+  when: rknn_service_enabled
 
 - name: Enable and start rkllama service
   ansible.builtin.systemd:
@@ -166,7 +167,7 @@
     enabled: true
     state: started
     daemon_reload: true
-  when: rkllama_service_enabled
+  when: rknn_service_enabled
 
 - name: Verify NPU is accessible
   ansible.builtin.shell: |
@@ -194,7 +195,7 @@
 
 - name: Test RKLLM model loading
   ansible.builtin.shell: |
-    {{ rkllama_venv_path }}/bin/python3 << 'EOF'
+    {{ rknn_venv_path }}/bin/python3 << 'EOF'
     import sys
     sys.path.insert(0, '/opt/rkllama')
     from src.rkllm import RKLLM
@@ -202,7 +203,7 @@
 
     print("Loading model...")
     start = time.time()
-    llm = RKLLM('{{ rkllm_model_path }}')
+    llm = RKLLM('{{ rknn_model_path }}')
     elapsed = time.time() - start
     print(f"Model loaded in {elapsed:.1f}s")
 
@@ -214,11 +215,11 @@
     EOF
   args:
     executable: /bin/bash
-  register: rkllm_test
+  register: rknn_model_test
   changed_when: false
-  when: model_file.stat.exists or model_download is changed
+  when: rknn_model_file.stat.exists or rknn_model_download is changed
 
 - name: Display RKLLM test result
   ansible.builtin.debug:
-    var: rkllm_test.stdout_lines
-  when: rkllm_test is defined and rkllm_test.stdout_lines is defined
+    var: rknn_model_test.stdout_lines
+  when: rknn_model_test is defined and rknn_model_test.stdout_lines is defined

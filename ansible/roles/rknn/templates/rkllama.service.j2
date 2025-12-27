@@ -7,9 +7,9 @@ Documentation=https://github.com/jfreed-dev/rkllama
 Type=simple
 User=root
 WorkingDirectory=/opt/rkllama
-Environment="PATH={{ rkllama_venv_path }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH={{ rknn_venv_path }}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart={{ rkllama_venv_path }}/bin/python3 /opt/rkllama/server.py --target_platform {{ rkllama_target_platform }} --port {{ rkllama_service_port }}
+ExecStart={{ rknn_venv_path }}/bin/python3 /opt/rkllama/server.py --target_platform {{ rknn_target_platform }} --port {{ rknn_service_port }}
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
