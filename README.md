@@ -122,29 +122,48 @@ This frees ~8GB per worker on eMMC and improves container performance.
 
 ## NPU Support
 
-Runtime-only RKNN installation for RK3588 NPU inference (~800MB vs ~10GB for full toolkit):
-- **rknn-llm** - LLM inference runtime with librknnrt.so
-- **rkllama** - Flask-based LLM server
-- **NPU Device**: `/dev/dri/renderD129` (via DRM subsystem)
-- **Driver**: rknpu v0.9.8+ (included in vendor kernel)
+Runtime-only RKNN installation for RK3588 NPU inference:
 
-### Quick NPU Test
+| Component | Description |
+|-----------|-------------|
+| rknn-llm | LLM inference runtime with librknnrt.so |
+| rkllama | Flask-based LLM API server (systemd service) |
+| DeepSeek 1.5B | Pre-installed RKLLM model (~1.9GB) |
+| NPU Device | `/dev/dri/renderD129` (DRM subsystem) |
+| Driver | rknpu v0.9.8+ (vendor kernel) |
+
+### LLM API Service
+
+Each node runs rkllama as a systemd service on port 8080:
 
 ```bash
-# Start LLM server on any node
-ssh root@10.10.88.73
-cd /opt/rkllama
-python3 server.py --target_platform rk3588 --port 8080
+# Load model
+curl -X POST http://10.10.88.73:8080/load_model \
+  -H "Content-Type: application/json" \
+  -d '{"model_name": "DeepSeek-R1-1.5B"}'
 
-# Check NPU status
+# Generate response
+curl -X POST http://10.10.88.73:8080/generate \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+```
+
+**Performance:** ~7-8 tokens/second per node
+
+See **[docs/NPU-API.md](docs/NPU-API.md)** for full API documentation.
+
+### NPU Status
+
+```bash
 cat /sys/kernel/debug/rknpu/version  # Driver version
 cat /sys/kernel/debug/rknpu/load     # Core utilization
+systemctl status rkllama             # Service status
 ```
 
 Requires Armbian with Rockchip vendor kernel (6.1.x).
 
 > **Note**: Dev tools (rknn-toolkit2, ezrknpu) are not installed by default.
-> For model conversion, install them manually or use a separate dev machine.
+> For model conversion, use a separate dev machine.
 
 ## Building Armbian
 
