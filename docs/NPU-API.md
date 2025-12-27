@@ -42,7 +42,7 @@ curl http://10.10.88.73:8080/
 
 Response:
 ```json
-{"message": "Welcome to RKLLama !", "github": "https://github.com/notpunhnox/rkllama"}
+{"message": "Welcome to RKLLama !", "github": "https://github.com/jfreed-dev/rkllama"}
 ```
 
 ### GET /models - List Available Models
