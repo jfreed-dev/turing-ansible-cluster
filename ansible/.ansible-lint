@@ -6,8 +6,7 @@ exclude_paths:
   - .cache/
 
 # Skip these rules for specific patterns
-skip_list:
-  - role-name  # Allow hyphens in role names (common convention)
+skip_list: []
 
 # Warn on these instead of failing
 warn_list:

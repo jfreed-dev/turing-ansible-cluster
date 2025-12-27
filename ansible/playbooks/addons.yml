@@ -31,8 +31,8 @@
 
   roles:
     - metallb
-    - nginx-ingress
-    - prometheus-stack
+    - nginx_ingress
+    - prometheus_stack
     - longhorn
     - portainer
 

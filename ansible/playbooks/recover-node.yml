@@ -154,8 +154,8 @@
 
   roles:
     - base
-    - k3s-prereq
-    - k3s-agent
+    - k3s_prereq
+    - k3s_agent
 
   post_tasks:
     - name: Verify node joined cluster

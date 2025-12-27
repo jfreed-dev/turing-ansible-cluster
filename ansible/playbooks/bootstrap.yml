@@ -56,7 +56,7 @@
 
   roles:
     - base
-    - k3s-prereq
+    - k3s_prereq
 
   post_tasks:
     - name: Verify iSCSI is running

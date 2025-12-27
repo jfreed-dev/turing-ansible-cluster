@@ -9,7 +9,7 @@
   vars_files:
     - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
   roles:
-    - k3s-server
+    - k3s_server
 
 - name: Install K3s agents (workers)
   hosts: workers
@@ -17,7 +17,7 @@
   vars_files:
     - "{{ playbook_dir }}/../secrets/{{ target_environment | default('server') }}.yml"
   roles:
-    - k3s-agent
+    - k3s_agent
 
 - name: Verify cluster
   hosts: controlplane
