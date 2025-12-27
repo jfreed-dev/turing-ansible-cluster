@@ -25,6 +25,8 @@
     - /root/RKLLAMA/models
     - /root/RKLLAMA/lib
 
+# Security: Cloning from official Rockchip repository
+# Verify repo authenticity at https://github.com/airockchip before first run
 - name: Clone RKNN-LLM runtime
   ansible.builtin.git:
     repo: https://github.com/airockchip/rknn-llm.git
@@ -48,6 +50,8 @@
     creates: /usr/lib/librknnrt.so
     executable: /bin/bash
 
+# Security: Cloning from maintained fork with API server support
+# Original project: https://github.com/notpunhnox/rkllama (archived)
 - name: Clone rkllama server
   ansible.builtin.git:
     repo: https://github.com/jfreed-dev/rkllama.git

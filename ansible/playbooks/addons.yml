@@ -55,7 +55,7 @@
           {{ ingress_ip }}  grafana.local prometheus.local alertmanager.local longhorn.local
 
           Access:
-          - Grafana: http://grafana.local (admin/admin)
+          - Grafana: http://grafana.local (admin/<password from secrets>)
           - Prometheus: http://prometheus.local
           - AlertManager: http://alertmanager.local
           - Longhorn: http://longhorn.local

@@ -74,6 +74,7 @@ cd ~/Code/turing-ansible-cluster/terraform/environments/server
 export TURINGPI_USERNAME=root
 export TURINGPI_PASSWORD=turing
 export TURINGPI_ENDPOINT=https://10.10.88.70
+# WARNING: Only use TURINGPI_INSECURE in trusted networks (disables TLS verification)
 export TURINGPI_INSECURE=true
 
 # Initialize Terraform
