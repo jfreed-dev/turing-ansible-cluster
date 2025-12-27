@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2025-12-27
+
+### Added
+
+- Cluster reset script (`scripts/reset-cluster.sh`) for clean reinstall
+  - Stops and uninstalls K3s on all nodes
+  - Wipes NVMe data partitions and Longhorn storage
+  - Clears container, CNI, and iptables configuration
+  - Power cycles nodes via BMC
+  - Supports dry-run mode and selective node targeting
+
 ## [1.3.4] - 2025-12-27
 
 ### Changed
@@ -298,6 +309,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.5]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.1...v1.3.2
