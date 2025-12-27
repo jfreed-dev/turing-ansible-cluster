@@ -28,13 +28,13 @@ variable "flash_nodes" {
 variable "boot_pattern" {
   description = "UART pattern to detect successful boot"
   type        = string
-  default     = "login:"  # Ubuntu/Armbian default
+  default     = "login:" # Ubuntu/Armbian default
 }
 
 variable "boot_timeout" {
   description = "Seconds to wait for boot completion"
   type        = number
-  default     = 300  # 5 minutes for flash + boot
+  default     = 300 # 5 minutes for flash + boot
 }
 
 locals {
@@ -94,5 +94,5 @@ output "cluster_ready" {
 
 output "next_steps" {
   description = "Instructions for next steps"
-  value = module.bmc.all_nodes_ready ? "All nodes are ready! Next: cd ../../ansible && ansible-playbook -i inventories/server/hosts.yml playbooks/site.yml" : "Waiting for nodes to boot..."
+  value       = module.bmc.all_nodes_ready ? "All nodes are ready! Next: cd ../../ansible && ansible-playbook -i inventories/server/hosts.yml playbooks/site.yml" : "Waiting for nodes to boot..."
 }
