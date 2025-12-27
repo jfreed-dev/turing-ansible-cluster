@@ -56,10 +56,10 @@ sudo mv tpi /usr/local/bin/
 
 | Slot | Hostname | Role | Storage |
 |------|----------|------|---------|
-| 1 | node1 | Control Plane | eMMC |
-| 2 | node2 | Worker | eMMC + NVMe |
-| 3 | node3 | Worker | eMMC + NVMe |
-| 4 | node4 | Worker | eMMC + NVMe |
+| 1 | node1 | Control Plane | NVMe (boot + data) |
+| 2 | node2 | Worker | NVMe (boot + data) |
+| 3 | node3 | Worker | NVMe (boot + data) |
+| 4 | node4 | Worker | NVMe (boot + data) |
 
 ### RK3588 Features
 

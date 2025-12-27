@@ -89,7 +89,6 @@
         src: "{{ longhorn_path }}/rancher"
         dest: /var/lib/rancher
         state: link
-      when: k3s_role | default('agent') == 'agent'
 
 # Handle eMMC boot with NVMe for storage (pre-migration)
 - name: Setup NVMe storage for Longhorn (eMMC boot)

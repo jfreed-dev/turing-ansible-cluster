@@ -20,8 +20,6 @@
   loop:
     - /opt/rknn
     - /opt/rknn-llm
-    - /opt/rkllama
-    - /opt/rkllama/models
     - /root/RKLLAMA/models
     - /root/RKLLAMA/lib
 

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2025-12-27
+
+### Fixed
+
+- `k3s_prereq` role: Symlink for `/var/lib/rancher` now created for all nodes with NVMe
+  - Previously only created for agent nodes, causing control plane K3s data loss on re-runs
+- `k3s_agent` role: Fixed template variable names in `config.yaml.j2`
+  - Changed `k3s_server_url` → `k3s_agent_server_url`
+  - Changed `k3s_server_token` → `k3s_agent_server_token`
+- `rknn` role: Removed `/opt/rkllama` from directory creation list
+  - Directory is now created by git clone to avoid "directory not empty" errors
+- `longhorn` role: Added node labeling for automatic disk detection
+  - Nodes are now labeled with `node.longhorn.io/create-default-disk=true`
+  - Required for `createDefaultDiskLabeledNodes: true` helm setting
+
+### Changed
+
+- Updated README to show node1 has NVMe (matches inventory)
+- Updated INSTALL.md hardware table to reflect NVMe boot on all nodes
+
 ## [1.3.5] - 2025-12-27
 
 ### Added
@@ -309,6 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive installation guide (INSTALL.md)
 - Implementation documentation (docs/IMPLEMENTATION.md)
 
+[1.3.6]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/jfreed-dev/turing-ansible-cluster/compare/v1.3.2...v1.3.3

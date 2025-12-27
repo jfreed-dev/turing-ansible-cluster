@@ -1,4 +1,16 @@
 ---
+- name: Label nodes for Longhorn default disk creation
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Node
+      metadata:
+        name: "{{ item }}"
+        labels:
+          node.longhorn.io/create-default-disk: "true"
+  loop: "{{ groups['k3s_cluster'] }}"
+
 - name: Add Longhorn Helm repo
   kubernetes.core.helm_repository:
     name: longhorn

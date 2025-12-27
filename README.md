@@ -17,7 +17,7 @@ Deploy a 4-node K3s cluster on Turing Pi with:
 
 | Node | IP | Role | Hardware |
 |------|-----|------|----------|
-| node1 | 10.10.88.73 | Control Plane | RK1 (slot 1) |
+| node1 | 10.10.88.73 | Control Plane | RK1 (slot 1) + NVMe |
 | node2 | 10.10.88.74 | Worker | RK1 (slot 2) + NVMe |
 | node3 | 10.10.88.75 | Worker | RK1 (slot 3) + NVMe |
 | node4 | 10.10.88.76 | Worker | RK1 (slot 4) + NVMe |
@@ -112,14 +112,14 @@ Matches existing Talos cluster:
 
 ## Storage Optimization
 
-Worker nodes with NVMe drives are automatically configured to use NVMe for both Longhorn and K3s container storage:
+All nodes with NVMe drives are automatically configured to use NVMe for both Longhorn and K3s container storage:
 
 | Path | Location | Purpose |
 |------|----------|---------|
-| `/var/lib/longhorn` | NVMe | Longhorn distributed storage |
+| `/var/lib/longhorn` | NVMe partition 2 | Longhorn distributed storage |
 | `/var/lib/rancher` | NVMe (symlink) | K3s container images and data |
 
-This frees ~8GB per worker on eMMC and improves container performance.
+**Note:** Nodes are labeled with `node.longhorn.io/create-default-disk=true` during deployment to enable automatic Longhorn disk detection.
 
 ## NPU Support
 
