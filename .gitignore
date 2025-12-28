@@ -50,12 +50,16 @@ venv/
 *.log
 logs/
 
-# AI assistant instructions
-.claude/
-ansible/.ansible/
+# AI coding assistants
 CLAUDE.md
+AGENT.md
 AGENTS.md
 GEMINI.md
+CODEX.md
+.claude/
+.gemini/
+.codex/
+ansible/.ansible/
 
 # Firmware images (too large for git, use S3)
 *.img
