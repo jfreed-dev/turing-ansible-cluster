@@ -13,6 +13,7 @@ override.tf.json
 
 # Ansible
 *.retry
+ansible/roles/geerlingguy.*/
 
 # For new environments, you can create custom inventories that are gitignored:
 # ansible/inventories/custom/hosts.yml (copy from hosts.yml.example)
