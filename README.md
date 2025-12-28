@@ -5,6 +5,8 @@
 
 Infrastructure-as-code for deploying K3s Kubernetes on Turing Pi RK1 hardware with NPU support.
 
+**[Architecture Documentation](docs/ARCHITECTURE.md)** - Visual diagrams for network topology, deployment pipeline, and component interactions.
+
 ## Overview
 
 Deploy a 4-node K3s cluster on Turing Pi with:
