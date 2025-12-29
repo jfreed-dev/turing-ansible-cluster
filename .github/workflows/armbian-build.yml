@@ -168,27 +168,25 @@ jobs:
           IMAGE_FILE="armbian-build/output/images/$FILENAME"
           BUCKET="armbian-builds"
 
-          # Upload image file
-          rclone copy "$IMAGE_FILE" "r2:${BUCKET}/turing-rk1/${VERSION}/" --progress --s3-chunk-size=64M
+          # Upload image file to armbian/ subdirectory
+          rclone copy "$IMAGE_FILE" "r2:${BUCKET}/turing-rk1/armbian/${VERSION}/" --progress --s3-chunk-size=64M
 
           # Upload checksum and info files
-          rclone copy "armbian-build/output/images/" "r2:${BUCKET}/turing-rk1/${VERSION}/" --include "*.sha" --include "*.txt" --progress
+          rclone copy "armbian-build/output/images/" "r2:${BUCKET}/turing-rk1/armbian/${VERSION}/" --include "*.sha" --include "*.txt" --progress
 
           # Construct public URL (requires R2 public access enabled)
-          # Format: https://pub-{hash}.r2.dev/{path} or custom domain
           R2_PUBLIC_URL="${{ secrets.R2_PUBLIC_URL }}"
           if [ -n "$R2_PUBLIC_URL" ]; then
-            DOWNLOAD_URL="${R2_PUBLIC_URL}/turing-rk1/${VERSION}/${FILENAME}"
+            DOWNLOAD_URL="${R2_PUBLIC_URL}/turing-rk1/armbian/${VERSION}/${FILENAME}"
           else
-            # Fallback to endpoint-based URL (requires signed URLs or public bucket)
-            DOWNLOAD_URL="${{ secrets.R2_ENDPOINT }}/armbian-builds/turing-rk1/${VERSION}/${FILENAME}"
+            DOWNLOAD_URL="${{ secrets.R2_ENDPOINT }}/armbian-builds/turing-rk1/armbian/${VERSION}/${FILENAME}"
           fi
           echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
           echo "Uploaded to: $DOWNLOAD_URL"
 
           # List uploaded files
           echo "Uploaded files:"
-          rclone ls "r2:${BUCKET}/turing-rk1/${VERSION}/"
+          rclone ls "r2:${BUCKET}/turing-rk1/armbian/${VERSION}/"
 
       - name: Update images.json
         run: |
@@ -227,6 +225,80 @@ jobs:
 
           echo "Updated images.json:"
           cat images.json
+
+      - name: Update unified images.json in R2
+        run: |
+          VERSION="${{ needs.check-version.outputs.upstream_version }}"
+          DATE=$(date -u +%Y-%m-%d)
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          DOWNLOAD_URL="${{ steps.upload.outputs.download_url }}"
+          R2_PUBLIC_URL="${{ secrets.R2_PUBLIC_URL }}"
+          BUCKET="armbian-builds"
+
+          # Download current unified images.json from R2
+          curl -sL "${R2_PUBLIC_URL}/turing-rk1/images.json" -o r2-images.json || echo '{}' > r2-images.json
+
+          # Get previous version info for history
+          PREV_VERSION=$(jq -r '.armbian.latest.version // ""' r2-images.json)
+          PREV_URL=$(jq -r '.armbian.latest.download_url // ""' r2-images.json)
+          PREV_DATE=$(jq -r '.armbian.latest.build_date // ""' r2-images.json)
+
+          # Update the armbian section in unified images.json
+          jq --arg version "$VERSION" \
+             --arg kernel "${{ steps.metadata.outputs.kernel }}" \
+             --arg date "$DATE" \
+             --arg timestamp "$TIMESTAMP" \
+             --arg filename "${{ steps.metadata.outputs.filename }}" \
+             --arg size "${{ steps.metadata.outputs.size }}" \
+             --arg sha256 "${{ steps.metadata.outputs.sha256 }}" \
+             --arg download_url "$DOWNLOAD_URL" \
+             --arg prev_version "$PREV_VERSION" \
+             --arg prev_url "$PREV_URL" \
+             --arg prev_date "$PREV_DATE" \
+          '
+          .updated_at = $timestamp |
+          .schema_version = "1.0" |
+
+          # Move current to history if different version
+          (if $prev_version != "" and $prev_version != "null" and $prev_version != $version then
+            .armbian.history = ([{
+              version: $prev_version,
+              build_date: $prev_date,
+              download_url: $prev_url
+            }] + (.armbian.history // [])[0:9])
+          else
+            .
+          end) |
+
+          # Update latest
+          .armbian.latest = {
+            version: $version,
+            kernel_version: $kernel,
+            release: "bookworm",
+            branch: "vendor",
+            build_date: $date,
+            filename: $filename,
+            size_bytes: ($size | tonumber),
+            sha256: $sha256,
+            download_url: $download_url
+          } |
+
+          # Ensure config exists
+          .armbian.config = {
+            board: "turing-rk1",
+            branch: "vendor",
+            release: "bookworm",
+            build_minimal: false,
+            build_desktop: false
+          }
+          ' r2-images.json > r2-images.json.tmp && mv r2-images.json.tmp r2-images.json
+
+          echo "Updated unified images.json:"
+          jq '.armbian' r2-images.json
+
+          # Upload to R2
+          rclone copy r2-images.json "r2:${BUCKET}/turing-rk1/" --progress
+          echo "Unified images.json uploaded to R2"
 
       - name: Commit and push changes
         run: |

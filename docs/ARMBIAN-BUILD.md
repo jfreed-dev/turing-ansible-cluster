@@ -388,7 +388,7 @@ dmesg | grep -i rknpu
 
 If you don't need customization, download pre-built images:
 
-- **Pre-built (Recommended)**: [armbian-builds.techki.to](https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz) - vendor kernel with NPU support
+- **Pre-built (Recommended)**: [armbian-builds.techki.to](https://armbian-builds.techki.to/turing-rk1/armbian/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz) - vendor kernel with NPU support
 - **Turing Pi Ubuntu**: https://firmware.turingpi.com/turing-rk1/
 
 > **Note**: The pre-built images from armbian-builds.techki.to include the `vendor` branch kernel required for NPU support.
@@ -524,7 +524,7 @@ Pre-built Armbian images are hosted on Cloudflare R2 at [armbian-builds.techki.t
 ./scripts/download-armbian-image.sh --latest
 
 # Or download directly
-wget https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz
+wget https://armbian-builds.techki.to/turing-rk1/armbian/26.02.0-trunk/Armbian-unofficial_26.02.0-trunk_Turing-rk1_bookworm_vendor_6.1.115.img.xz
 
 # Download and auto-decompress
 DECOMPRESS=true ./scripts/download-armbian-image.sh --latest

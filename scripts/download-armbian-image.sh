@@ -68,7 +68,7 @@ Examples:
   DOWNLOAD_DIR=/tmp ./download-armbian-image.sh --latest
 
   # Download from direct URL
-  ./download-armbian-image.sh https://armbian-builds.techki.to/turing-rk1/26.02.0-trunk/Armbian.img.xz
+  ./download-armbian-image.sh https://armbian-builds.techki.to/turing-rk1/armbian/26.02.0-trunk/Armbian.img.xz
 
 EOF
     exit 1
