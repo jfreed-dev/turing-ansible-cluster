@@ -1,0 +1,26 @@
+---
+# Prepare the test environment for base role
+# Minimal setup - the base role handles most configuration
+
+- name: Prepare test instance
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Ensure apt cache is updated
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install minimal prerequisites
+      ansible.builtin.apt:
+        name:
+          - systemd
+          - kmod
+          - procps
+        state: present
+
+    - name: Ensure systemd is running
+      ansible.builtin.systemd:
+        daemon_reload: true

@@ -1,0 +1,19 @@
+---
+# Default variables for k3s_server role
+
+# K3s version to install
+# Find versions at: https://github.com/k3s-io/k3s/releases
+k3s_version: "v1.31.3+k3s1"
+
+# Cluster network configuration
+pod_cidr: "10.244.0.0/16"
+service_cidr: "10.96.0.0/12"
+cluster_dns: "10.96.0.10"
+cluster_domain: "cluster.local"
+
+# Cluster name (used in TLS SANs)
+cluster_name: "k3s-cluster"
+
+# K3s cluster token (MUST be overridden in secrets)
+# Generate with: openssl rand -hex 32
+# k3s_cluster_token: ""  # Required - set in secrets

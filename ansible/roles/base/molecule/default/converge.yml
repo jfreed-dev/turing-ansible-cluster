@@ -1,0 +1,44 @@
+---
+# Converge playbook - applies the base role
+
+- name: Converge
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # Use a subset of packages for faster testing
+    # Full list is in role defaults
+    base_packages:
+      - curl
+      - wget
+      - jq
+      - htop
+      - vim
+      # Longhorn requirements (tests iSCSI setup)
+      - open-iscsi
+
+    # Kernel modules - empty for container testing (no kernel access)
+    # In production these are set in defaults/main.yml
+    base_kernel_modules: []
+
+    # Sysctl settings for Kubernetes
+    base_sysctl_settings:
+      net.bridge.bridge-nf-call-iptables: 1
+      net.bridge.bridge-nf-call-ip6tables: 1
+      net.ipv4.ip_forward: 1
+      fs.inotify.max_user_watches: 524288
+
+    # Timezone
+    base_timezone: "UTC"
+
+    # Skip /etc/hosts modification in container (Docker mounts it read-only)
+    molecule_test: true
+
+  roles:
+    - role: base
+
+  post_tasks:
+    - name: Display base role completion
+      ansible.builtin.debug:
+        msg: "Base role configuration completed"

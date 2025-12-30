@@ -1,0 +1,230 @@
+---
+# Verify playbook - validates base role completed successfully
+
+- name: Verify base role configuration
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    expected_packages:
+      - curl
+      - wget
+      - jq
+      - htop
+      - vim
+      - open-iscsi
+
+    expected_sysctl:
+      net.bridge.bridge-nf-call-iptables: "1"
+      net.bridge.bridge-nf-call-ip6tables: "1"
+      net.ipv4.ip_forward: "1"
+      fs.inotify.max_user_watches: "524288"
+
+  tasks:
+    # ==================== Package Verification ====================
+
+    - name: Check installed packages
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Verify required packages are installed
+      ansible.builtin.assert:
+        that:
+          - item in ansible_facts.packages
+        fail_msg: "Package {{ item }} is not installed"
+        success_msg: "Package {{ item }} is installed"
+      loop: "{{ expected_packages }}"
+
+    # ==================== Kernel Modules Configuration ====================
+    # Note: Kernel modules are disabled in container tests (base_kernel_modules: [])
+    # This section verifies the config file exists but doesn't check specific modules
+
+    - name: Verify kernel modules config file exists
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/k3s.conf
+      register: kernel_modules_config
+
+    - name: Assert kernel modules config exists
+      ansible.builtin.assert:
+        that:
+          - kernel_modules_config.stat.exists
+        fail_msg: "/etc/modules-load.d/k3s.conf does not exist"
+        success_msg: "Kernel modules config file exists"
+
+    # ==================== Sysctl Configuration ====================
+
+    - name: Verify sysctl config file exists
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/99-kubernetes.conf
+      register: sysctl_config
+
+    - name: Assert sysctl config exists
+      ansible.builtin.assert:
+        that:
+          - sysctl_config.stat.exists
+        fail_msg: "/etc/sysctl.d/99-kubernetes.conf does not exist"
+        success_msg: "Sysctl config file exists"
+
+    - name: Verify sysctl config permissions
+      ansible.builtin.assert:
+        that:
+          - sysctl_config.stat.mode == "0644"
+        fail_msg: "Sysctl config has incorrect permissions"
+        success_msg: "Sysctl config permissions are correct"
+
+    - name: Read sysctl config
+      ansible.builtin.slurp:
+        src: /etc/sysctl.d/99-kubernetes.conf
+      register: sysctl_content
+
+    - name: Display sysctl config content
+      ansible.builtin.debug:
+        msg: "{{ sysctl_content.content | b64decode }}"
+
+    - name: Verify sysctl settings are in config file
+      ansible.builtin.assert:
+        that:
+          - "item.key in (sysctl_content.content | b64decode)"
+        fail_msg: "Sysctl setting {{ item.key }} not found in config"
+        success_msg: "Sysctl setting {{ item.key }} is configured"
+      loop: "{{ expected_sysctl | dict2items }}"
+
+    # ==================== Hostname Configuration ====================
+
+    - name: Get current hostname
+      ansible.builtin.command: hostname
+      register: current_hostname
+      changed_when: false
+
+    - name: Verify hostname is set correctly
+      ansible.builtin.assert:
+        that:
+          - current_hostname.stdout == inventory_hostname
+        fail_msg: "Hostname mismatch: expected {{ inventory_hostname }}, got {{ current_hostname.stdout }}"
+        success_msg: "Hostname is set correctly to {{ inventory_hostname }}"
+
+    - name: Verify /etc/hostname content
+      ansible.builtin.slurp:
+        src: /etc/hostname
+      register: etc_hostname
+
+    - name: Assert /etc/hostname matches inventory_hostname
+      ansible.builtin.assert:
+        that:
+          - (etc_hostname.content | b64decode | trim) == inventory_hostname
+        fail_msg: "/etc/hostname content mismatch"
+        success_msg: "/etc/hostname is correct"
+
+    # ==================== Hosts File Configuration ====================
+    # Note: /etc/hosts is managed by Docker in container tests, so we just verify it exists
+
+    - name: Verify /etc/hosts exists
+      ansible.builtin.stat:
+        path: /etc/hosts
+      register: etc_hosts
+
+    - name: Assert /etc/hosts exists
+      ansible.builtin.assert:
+        that:
+          - etc_hosts.stat.exists
+        fail_msg: "/etc/hosts does not exist"
+        success_msg: "/etc/hosts exists"
+
+    # ==================== Timezone Configuration ====================
+
+    - name: Get current timezone
+      ansible.builtin.command: timedatectl show --property=Timezone --value
+      register: current_timezone
+      changed_when: false
+      failed_when: false
+
+    - name: Verify timezone is set (if timedatectl available)
+      ansible.builtin.assert:
+        that:
+          - current_timezone.stdout == "UTC"
+        fail_msg: "Timezone mismatch: expected UTC, got {{ current_timezone.stdout }}"
+        success_msg: "Timezone is correctly set to UTC"
+      when: current_timezone.rc == 0
+
+    # ==================== iSCSI Configuration ====================
+
+    - name: Check if open-iscsi is installed
+      ansible.builtin.package_facts:
+        manager: apt
+
+    - name: Verify iSCSI configuration (when open-iscsi installed)
+      when: "'open-iscsi' in ansible_facts.packages"
+      block:
+        - name: Verify iscsid service file exists
+          ansible.builtin.stat:
+            path: /lib/systemd/system/iscsid.service
+          register: iscsid_service
+
+        - name: Assert iscsid service exists
+          ansible.builtin.assert:
+            that:
+              - iscsid_service.stat.exists
+            fail_msg: "iscsid service file not found"
+            success_msg: "iscsid service file exists"
+
+        - name: Get iscsid service status
+          ansible.builtin.systemd:
+            name: iscsid
+          register: iscsid_status
+          failed_when: false
+
+        - name: Display iscsid service status
+          ansible.builtin.debug:
+            msg: "iscsid service state: {{ iscsid_status.status.ActiveState | default('unknown') }}"
+
+        - name: Verify iSCSI initiator name file exists
+          ansible.builtin.stat:
+            path: /etc/iscsi/initiatorname.iscsi
+          register: iscsi_initiator
+
+        - name: Assert iSCSI initiator file exists
+          ansible.builtin.assert:
+            that:
+              - iscsi_initiator.stat.exists
+            fail_msg: "iSCSI initiator name file not found"
+            success_msg: "iSCSI initiator name file exists"
+
+        - name: Read iSCSI initiator name
+          ansible.builtin.slurp:
+            src: /etc/iscsi/initiatorname.iscsi
+          register: iscsi_initiator_content
+          when: iscsi_initiator.stat.exists
+
+        - name: Verify iSCSI initiator name format
+          ansible.builtin.assert:
+            that:
+              - "'InitiatorName=' in (iscsi_initiator_content.content | b64decode)"
+            fail_msg: "iSCSI initiator name has invalid format"
+            success_msg: "iSCSI initiator name is correctly formatted"
+          when: iscsi_initiator.stat.exists
+
+    # ==================== Summary ====================
+
+    - name: Collect verification results
+      ansible.builtin.set_fact:
+        packages_ok: true
+        kernel_modules_ok: "{{ kernel_modules_config.stat.exists }}"
+        sysctl_ok: "{{ sysctl_config.stat.exists }}"
+        hostname_ok: "{{ current_hostname.stdout == inventory_hostname }}"
+        hosts_ok: "{{ etc_hosts.stat.exists }}"
+        iscsi_ok: "{{ iscsi_initiator.stat.exists | default(false) }}"
+
+    - name: Verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Base Role Verification Complete"
+          - "=========================================="
+          - "Packages installed: OK"
+          - "Kernel modules config: {{ 'OK' if kernel_modules_ok else 'FAIL' }}"
+          - "Sysctl config: {{ 'OK' if sysctl_ok else 'FAIL' }}"
+          - "Hostname: {{ 'OK' if hostname_ok else 'FAIL' }}"
+          - "Hosts file exists: {{ 'OK' if hosts_ok else 'FAIL' }}"
+          - "iSCSI config: {{ 'OK' if iscsi_ok else 'N/A' }}"
+          - "=========================================="

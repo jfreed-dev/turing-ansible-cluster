@@ -59,12 +59,22 @@
     k3s_server_token: "{{ k3s_server_node_token.content | b64decode | trim }}"
     k3s_server_url: "https://{{ ansible_host }}:6443"
 
+- name: Check if local kubeconfig exists
+  delegate_to: localhost
+  become: false
+  ansible.builtin.stat:
+    path: "{{ playbook_dir }}/../kubeconfig"
+  register: k3s_server_local_kubeconfig
+  run_once: true
+
 - name: Fetch kubeconfig
   ansible.builtin.fetch:
     src: /etc/rancher/k3s/k3s.yaml
     dest: "{{ playbook_dir }}/../kubeconfig"
     flat: true
   run_once: true
+  when: not k3s_server_local_kubeconfig.stat.exists
+  register: k3s_server_kubeconfig_fetched
 
 - name: Update kubeconfig server address
   delegate_to: localhost
@@ -74,3 +84,4 @@
     regexp: 'https://127.0.0.1:6443'
     replace: "https://{{ ansible_host }}:6443"
   run_once: true
+  when: k3s_server_kubeconfig_fetched.changed | default(false)

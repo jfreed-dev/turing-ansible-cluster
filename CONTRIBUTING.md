@@ -7,18 +7,20 @@ Contributions are welcome! This document outlines how to contribute to this proj
 1. Fork the repository
 2. Clone your fork locally
 3. Install dependencies: `make install-deps`
+4. Install pre-commit hooks: `make pre-commit-install`
 
 ## Before Submitting
 
-Run the validation checks:
+Pre-commit hooks run automatically on `git commit`. To run all checks manually:
 
 ```bash
-# Run all checks
-make test
+# Run pre-commit on all files
+make pre-commit
 
-# Or individually:
+# Or run individual checks:
 make lint          # YAML and Ansible linting
 make syntax-check  # Playbook syntax validation
+make test          # Run all checks
 ```
 
 ## Pull Request Guidelines
@@ -37,9 +39,18 @@ make syntax-check  # Playbook syntax validation
 
 ## Secrets and Sensitive Data
 
-- **Never** commit secrets, passwords, or private keys
+- **Never** commit unencrypted secrets, passwords, or private keys
+- Use Ansible Vault for secrets: see [docs/VAULT-SETUP.md](docs/VAULT-SETUP.md)
 - Use `*.example` files for templates
 - Add sensitive patterns to `.gitignore`
+
+```bash
+# Initialize vault (first time only)
+make vault-init
+
+# Edit encrypted secrets
+make vault-edit
+```
 
 ## Testing Changes
 

@@ -1,0 +1,60 @@
+---
+# Prepare the test environment for k3s_server role
+# Installs prerequisites that would normally be handled by other roles
+
+- name: Prepare test instance
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - gnupg
+          - iptables
+          - procps
+          - iproute2
+        state: present
+
+    - name: Ensure systemd is running
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Load required kernel modules (if available)
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - br_netfilter
+        - overlay
+      failed_when: false  # May not be available in container
+
+    - name: Set sysctl settings for Kubernetes
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_set: true
+        reload: true
+      loop:
+        - { name: net.bridge.bridge-nf-call-iptables, value: "1" }
+        - { name: net.bridge.bridge-nf-call-ip6tables, value: "1" }
+        - { name: net.ipv4.ip_forward, value: "1" }
+      failed_when: false  # May fail in container without proper capabilities
+
+    - name: Create rancher directory structure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /etc/rancher
+        - /var/lib/rancher

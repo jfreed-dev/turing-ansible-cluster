@@ -1,0 +1,70 @@
+---
+# Molecule configuration for base role
+# Tests system configuration, packages, kernel modules, and sysctl settings
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: requirements.yml
+    force: false
+
+driver:
+  name: docker
+
+platforms:
+  - name: base-test
+    image: geerlingguy/docker-debian12-ansible:latest
+    command: ""
+    privileged: true
+    cgroupns_mode: host
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    pre_build_image: true
+    tmpfs:
+      - /run
+      - /tmp
+    capabilities:
+      - SYS_ADMIN
+      - NET_ADMIN
+
+provisioner:
+  name: ansible
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    host_vars:
+      base-test:
+        ansible_host: base-test
+        inventory_hostname: base-test
+    group_vars:
+      all:
+        tpi_bmc_host: "10.10.88.70"
+  config_options:
+    defaults:
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/..:${MOLECULE_EPHEMERAL_DIRECTORY}/roles
+      callbacks_enabled: profile_tasks
+      fact_caching: jsonfile
+      fact_caching_connection: /tmp/molecule_facts
+      fact_caching_timeout: 3600
+    ssh_connection:
+      pipelining: true
+
+verifier:
+  name: ansible
+
+scenario:
+  name: default
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - verify
+    - cleanup
+    - destroy

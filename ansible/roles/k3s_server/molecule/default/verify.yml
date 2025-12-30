@@ -1,0 +1,193 @@
+---
+# Verify playbook - validates k3s_server role completed successfully
+
+- name: Verify k3s server installation
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    k3s_version: "v1.31.3+k3s1"
+
+  tasks:
+    # ==================== File System Checks ====================
+
+    - name: Verify k3s binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary
+      failed_when: not k3s_binary.stat.exists
+
+    - name: Verify k3s binary is executable
+      ansible.builtin.stat:
+        path: /usr/local/bin/k3s
+      register: k3s_binary_exec
+      failed_when: not k3s_binary_exec.stat.executable
+
+    - name: Verify k3s config directory exists
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s
+      register: k3s_config_dir
+      failed_when: not k3s_config_dir.stat.isdir
+
+    - name: Verify k3s config file exists
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_file
+      failed_when: not k3s_config_file.stat.exists
+
+    - name: Verify k3s config file permissions
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/config.yaml
+      register: k3s_config_perms
+      failed_when: k3s_config_perms.stat.mode != "0644"
+
+    # ==================== Configuration Validation ====================
+
+    - name: Read k3s config file
+      ansible.builtin.slurp:
+        src: /etc/rancher/k3s/config.yaml
+      register: k3s_config_content
+
+    - name: Parse k3s config
+      ansible.builtin.set_fact:
+        k3s_config: "{{ k3s_config_content.content | b64decode | from_yaml }}"
+
+    - name: Verify cluster-cidr is configured
+      ansible.builtin.assert:
+        that:
+          - k3s_config['cluster-cidr'] == "10.244.0.0/16"
+        fail_msg: "cluster-cidr not configured correctly"
+        success_msg: "cluster-cidr is correct"
+
+    - name: Verify service-cidr is configured
+      ansible.builtin.assert:
+        that:
+          - k3s_config['service-cidr'] == "10.96.0.0/12"
+        fail_msg: "service-cidr not configured correctly"
+        success_msg: "service-cidr is correct"
+
+    - name: Verify traefik is disabled
+      ansible.builtin.assert:
+        that:
+          - "'traefik' in k3s_config['disable']"
+        fail_msg: "traefik should be disabled"
+        success_msg: "traefik is correctly disabled"
+
+    - name: Verify servicelb is disabled
+      ansible.builtin.assert:
+        that:
+          - "'servicelb' in k3s_config['disable']"
+        fail_msg: "servicelb should be disabled"
+        success_msg: "servicelb is correctly disabled"
+
+    - name: Verify flannel backend is vxlan
+      ansible.builtin.assert:
+        that:
+          - k3s_config['flannel-backend'] == "vxlan"
+        fail_msg: "flannel-backend should be vxlan"
+        success_msg: "flannel-backend is correct"
+
+    - name: Verify kubeconfig write mode is secure
+      ansible.builtin.assert:
+        that:
+          - k3s_config['write-kubeconfig-mode'] == "0600"
+        fail_msg: "write-kubeconfig-mode should be 0600"
+        success_msg: "kubeconfig mode is secure"
+
+    # ==================== Version Check ====================
+
+    - name: Get k3s version
+      ansible.builtin.command: /usr/local/bin/k3s --version
+      register: k3s_version_output
+      changed_when: false
+
+    - name: Verify k3s version matches expected
+      ansible.builtin.assert:
+        that:
+          - k3s_version in k3s_version_output.stdout
+        fail_msg: "K3s version mismatch: expected {{ k3s_version }}, got {{ k3s_version_output.stdout }}"
+        success_msg: "K3s version {{ k3s_version }} installed correctly"
+
+    # ==================== Service Checks ====================
+
+    - name: Check if k3s service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/k3s.service
+      register: k3s_service_file
+
+    - name: Verify k3s service file exists
+      ansible.builtin.assert:
+        that:
+          - k3s_service_file.stat.exists
+        fail_msg: "k3s.service file not found"
+        success_msg: "k3s.service file exists"
+
+    - name: Get k3s service status
+      ansible.builtin.systemd:
+        name: k3s
+      register: k3s_service_status
+      failed_when: false
+
+    - name: Display k3s service status
+      ansible.builtin.debug:
+        msg: "K3s service state: {{ k3s_service_status.status.ActiveState | default('unknown') }}"
+
+    # ==================== API Server Check ====================
+
+    - name: Wait for k3s API to be ready
+      ansible.builtin.command: k3s kubectl get nodes
+      register: k3s_nodes
+      until: k3s_nodes.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      failed_when: false
+
+    - name: Verify k3s API is responding
+      ansible.builtin.assert:
+        that:
+          - k3s_nodes.rc == 0
+        fail_msg: "K3s API not responding after 5 minutes"
+        success_msg: "K3s API is responding"
+      when: k3s_nodes is defined
+
+    - name: Display node status
+      ansible.builtin.debug:
+        msg: "{{ k3s_nodes.stdout_lines }}"
+      when: k3s_nodes.rc == 0
+
+    # ==================== Token and Kubeconfig ====================
+
+    - name: Verify node token file exists
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/node-token
+      register: k3s_node_token
+      failed_when: not k3s_node_token.stat.exists
+
+    - name: Verify kubeconfig exists
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/k3s.yaml
+      register: k3s_kubeconfig
+      failed_when: not k3s_kubeconfig.stat.exists
+
+    - name: Verify kubeconfig has secure permissions
+      ansible.builtin.stat:
+        path: /etc/rancher/k3s/k3s.yaml
+      register: k3s_kubeconfig_perms
+      failed_when: k3s_kubeconfig_perms.stat.mode != "0600"
+
+    # ==================== Summary ====================
+
+    - name: Verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "K3s Server Verification Complete"
+          - "=========================================="
+          - "Binary: {{ k3s_binary.stat.path }}"
+          - "Version: {{ k3s_version_output.stdout | trim }}"
+          - "Config: {{ k3s_config_file.stat.path }}"
+          - "Service: {{ k3s_service_status.status.ActiveState | default('unknown') }}"
+          - "API Ready: {{ 'Yes' if k3s_nodes.rc == 0 else 'No' }}"
+          - "=========================================="

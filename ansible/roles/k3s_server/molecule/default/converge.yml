@@ -1,0 +1,40 @@
+---
+# Converge playbook - applies the k3s_server role
+
+- name: Converge
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # K3s configuration
+    k3s_version: "v1.31.3+k3s1"
+    k3s_cluster_token: "molecule-test-token-not-for-production"
+
+    # Network configuration (matches production defaults)
+    pod_cidr: "10.244.0.0/16"
+    service_cidr: "10.96.0.0/12"
+    cluster_dns: "10.96.0.10"
+    cluster_domain: "cluster.local"
+    cluster_name: "molecule-test"
+
+    # Override playbook_dir for kubeconfig fetch
+    playbook_dir: "/tmp/molecule"
+
+  pre_tasks:
+    - name: Create molecule temp directory
+      ansible.builtin.file:
+        path: /tmp/molecule
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+
+  roles:
+    - role: k3s_server
+
+  post_tasks:
+    - name: Display k3s installation result
+      ansible.builtin.debug:
+        msg: "K3s server installation completed"
+      when: k3s_server_install is defined
