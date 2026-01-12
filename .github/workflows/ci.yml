@@ -125,4 +125,4 @@ jobs:
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
-          ANSIBLE_CONDITIONAL_BARE_VARS: 'false'
+          ALLOW_BROKEN_CONDITIONALS: 'true'
