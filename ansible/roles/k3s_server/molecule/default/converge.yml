@@ -18,8 +18,8 @@
     cluster_domain: "cluster.local"
     cluster_name: "molecule-test"
 
-    # Override playbook_dir for kubeconfig fetch
-    playbook_dir: "/tmp/molecule"
+    # Directory for kubeconfig fetch
+    kubeconfig_dir: "/tmp/molecule"
 
   pre_tasks:
     - name: Create molecule temp directory

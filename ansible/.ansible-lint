@@ -4,13 +4,16 @@
 exclude_paths:
   - .ansible/
   - .cache/
+  - roles/geerlingguy.*/
 
 # Skip these rules for specific patterns
-skip_list: []
+skip_list:
+  - var-naming[no-role-prefix]  # Allow existing variable names without role prefixes
 
 # Warn on these instead of failing
 warn_list:
   - yaml[line-length]
+  - no-handler  # Some tasks use when: changed but don't fit handler pattern
 
 # Enable offline mode for faster runs
 offline: true

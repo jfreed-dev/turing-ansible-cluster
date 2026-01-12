@@ -17,3 +17,6 @@ cluster_name: "k3s-cluster"
 # K3s cluster token (MUST be overridden in secrets)
 # Generate with: openssl rand -hex 32
 # k3s_cluster_token: ""  # Required - set in secrets
+
+# Kubeconfig destination directory (defaults to parent of playbook directory)
+kubeconfig_dir: "{{ playbook_dir }}/.."

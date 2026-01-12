@@ -23,6 +23,11 @@ jobs:
         run: |
           pip install ansible ansible-lint yamllint
 
+      - name: Create empty vault password file
+        working-directory: ansible
+        run: |
+          echo "ci-dummy-password" > .vault_pass
+
       - name: Run yamllint
         working-directory: ansible
         run: |
@@ -48,6 +53,11 @@ jobs:
       - name: Install Ansible
         run: |
           pip install ansible
+
+      - name: Create empty vault password file
+        working-directory: ansible
+        run: |
+          echo "ci-dummy-password" > .vault_pass
 
       - name: Install Galaxy requirements
         working-directory: ansible
