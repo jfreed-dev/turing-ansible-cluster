@@ -70,3 +70,7 @@ ansible/.ansible/
 *.img.xz
 *.raw
 *.raw.xz
+
+# Environment
+.env
+.env.local
